@@ -1,1 +1,1311 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>採用ダッシュボード</title>
+  <style>
+    /* ---------- Design tokens ---------- */
+    :root {
+      /* Color — Light */
+      --bg:            #f6f7f9;
+      --surface:       #ffffff;
+      --surface-2:     #f0f2f5;
+      --border:        #e3e6ea;
+      --text:          #121417;
+      --text-muted:    #5b6470;
+      --text-subtle:   #8b95a1;
 
+      --brand:         #2f6feb;
+      --brand-weak:    #e8efff;
+      --success:       #1f9d55;
+      --success-weak:  #e3f6ea;
+      --warning:       #d98b12;
+      --warning-weak:  #fdf1dc;
+      --danger:        #d14343;
+      --danger-weak:   #fbe4e4;
+      --info:          #6b5bd1;
+      --info-weak:     #ebe7fb;
+
+      /* Radii */
+      --r-sm: 6px;
+      --r-md: 10px;
+      --r-lg: 14px;
+      --r-xl: 20px;
+
+      /* Spacing */
+      --s-1: 4px;
+      --s-2: 8px;
+      --s-3: 12px;
+      --s-4: 16px;
+      --s-5: 24px;
+      --s-6: 32px;
+      --s-7: 48px;
+
+      /* Shadows */
+      --shadow-1: 0 1px 2px rgba(17, 24, 39, .04), 0 1px 3px rgba(17, 24, 39, .06);
+      --shadow-2: 0 4px 12px rgba(17, 24, 39, .08);
+      --shadow-pop: 0 10px 30px rgba(17, 24, 39, .12);
+
+      /* Layout */
+      --sidebar-w: 232px;
+      --header-h: 60px;
+      --content-max: 1400px;
+
+      /* Type */
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans",
+              "Noto Sans JP", Meiryo, system-ui, sans-serif;
+    }
+
+    [data-theme="dark"] {
+      --bg:            #0f1216;
+      --surface:       #171b21;
+      --surface-2:     #1f242c;
+      --border:        #2a313b;
+      --text:          #e9ecf1;
+      --text-muted:    #a5afbd;
+      --text-subtle:   #7b8493;
+
+      --brand:         #6ea0ff;
+      --brand-weak:    #1b2944;
+      --success:       #4ecb82;
+      --success-weak:  #163627;
+      --warning:       #e6a84a;
+      --warning-weak:  #3a2b13;
+      --danger:        #ef6a6a;
+      --danger-weak:   #3a1f20;
+      --info:          #9d8ff0;
+      --info-weak:     #25214a;
+
+      --shadow-1: 0 1px 2px rgba(0, 0, 0, .35);
+      --shadow-2: 0 4px 14px rgba(0, 0, 0, .45);
+      --shadow-pop: 0 12px 32px rgba(0, 0, 0, .55);
+    }
+
+    /* ---------- Base ---------- */
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      color: var(--text);
+      background: var(--bg);
+      font-size: 14px;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; cursor: pointer; }
+
+    /* ---------- App shell ---------- */
+    .app {
+      display: grid;
+      grid-template-columns: var(--sidebar-w) 1fr;
+      min-height: 100vh;
+    }
+
+    /* ---------- Sidebar ---------- */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: var(--s-5) var(--s-4);
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      gap: var(--s-5);
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: var(--s-3);
+      padding: 0 var(--s-2);
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: .02em;
+    }
+    .logo-mark {
+      width: 28px; height: 28px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--brand), var(--info));
+      display: grid; place-items: center;
+      color: #fff;
+      font-weight: 800;
+      font-size: 13px;
+    }
+    .nav {
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .nav-section {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--text-subtle);
+      padding: var(--s-3) var(--s-2) var(--s-2);
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: var(--s-3);
+      padding: var(--s-2) var(--s-3);
+      border-radius: var(--r-md);
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .nav-item:hover { background: var(--surface-2); color: var(--text); }
+    .nav-item.is-active {
+      background: var(--brand-weak);
+      color: var(--brand);
+      font-weight: 600;
+    }
+    .nav-icon {
+      width: 18px; height: 18px; flex: 0 0 18px;
+      display: inline-block;
+      background: currentColor;
+      -webkit-mask: var(--icon) center/contain no-repeat;
+              mask: var(--icon) center/contain no-repeat;
+    }
+    .nav-badge {
+      margin-left: auto;
+      font-size: 11px;
+      background: var(--surface-2);
+      color: var(--text-muted);
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+    .nav-item.is-active .nav-badge {
+      background: var(--brand);
+      color: #fff;
+    }
+
+    /* ---------- Main ---------- */
+    .main {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    /* Header */
+    .header {
+      position: sticky; top: 0; z-index: 10;
+      height: var(--header-h);
+      background: color-mix(in srgb, var(--surface) 85%, transparent);
+      backdrop-filter: saturate(180%) blur(8px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 var(--s-6);
+      display: flex; align-items: center; gap: var(--s-4);
+    }
+    .header h1 {
+      font-size: 15px;
+      font-weight: 600;
+      margin: 0;
+      color: var(--text);
+    }
+    .crumbs {
+      color: var(--text-subtle);
+      font-size: 13px;
+    }
+    .header-actions {
+      margin-left: auto;
+      display: flex; align-items: center; gap: var(--s-2);
+    }
+    .search {
+      display: flex; align-items: center;
+      background: var(--surface-2);
+      border: 1px solid transparent;
+      border-radius: var(--r-md);
+      padding: 6px 10px;
+      width: 280px;
+      transition: border-color .15s, background .15s;
+    }
+    .search:focus-within {
+      background: var(--surface);
+      border-color: var(--brand);
+    }
+    .search input {
+      border: 0; outline: 0; background: transparent;
+      color: var(--text);
+      flex: 1; font-size: 13px;
+    }
+    .search kbd {
+      font-family: var(--font);
+      font-size: 11px;
+      color: var(--text-subtle);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 1px 6px; border-radius: 4px;
+    }
+    .icon-btn {
+      width: 34px; height: 34px;
+      border-radius: var(--r-md);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-muted);
+      display: grid; place-items: center;
+      transition: background .15s, color .15s;
+    }
+    .icon-btn:hover { background: var(--surface-2); color: var(--text); }
+    .avatar {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: linear-gradient(135deg, #ffb347, #ff7e5f);
+      color: #fff; font-weight: 700;
+      display: grid; place-items: center;
+      font-size: 13px;
+    }
+
+    /* Content */
+    .content {
+      padding: var(--s-6);
+      max-width: var(--content-max);
+      width: 100%;
+      margin: 0 auto;
+      display: flex; flex-direction: column;
+      gap: var(--s-5);
+    }
+    .page-title {
+      display: flex; align-items: end; justify-content: space-between;
+      gap: var(--s-4);
+      flex-wrap: wrap;
+    }
+    .page-title h2 {
+      margin: 0 0 4px;
+      font-size: 22px;
+      letter-spacing: -.01em;
+    }
+    .page-title p {
+      margin: 0;
+      color: var(--text-muted);
+    }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 14px;
+      border-radius: var(--r-md);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-weight: 500;
+      transition: background .15s, border-color .15s, transform .05s;
+    }
+    .btn:hover { background: var(--surface-2); }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary {
+      background: var(--brand);
+      color: #fff;
+      border-color: transparent;
+    }
+    .btn-primary:hover { background: color-mix(in srgb, var(--brand) 88%, #000); }
+
+    /* Section placeholders (filled in next steps) */
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      padding: var(--s-5);
+      box-shadow: var(--shadow-1);
+    }
+    .section h3 {
+      margin: 0 0 var(--s-3);
+      font-size: 14px;
+      color: var(--text-muted);
+      font-weight: 600;
+      letter-spacing: .02em;
+    }
+    .placeholder {
+      height: 120px;
+      display: grid; place-items: center;
+      color: var(--text-subtle);
+      background:
+        repeating-linear-gradient(
+          45deg,
+          var(--surface-2) 0 10px,
+          transparent 10px 20px
+        );
+      border-radius: var(--r-md);
+      font-size: 13px;
+    }
+
+    /* Grid for upcoming section layout */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: var(--s-5);
+    }
+
+    /* Section header with action */
+    .section-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: var(--s-4);
+    }
+    .section-head h3 { margin: 0; }
+    .link-btn {
+      color: var(--brand);
+      font-size: 12px;
+      font-weight: 600;
+      background: none; border: 0; padding: 0;
+    }
+    .link-btn:hover { text-decoration: underline; }
+
+    /* ---------- KPI cards ---------- */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--s-4);
+    }
+    .kpi {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      padding: var(--s-4);
+      box-shadow: var(--shadow-1);
+      display: flex;
+      flex-direction: column;
+      gap: var(--s-2);
+      position: relative;
+      overflow: hidden;
+    }
+    .kpi-head {
+      display: flex; align-items: center; gap: var(--s-3);
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .kpi-icon {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      display: grid; place-items: center;
+      flex: 0 0 32px;
+    }
+    .kpi-icon.brand   { background: var(--brand-weak);   color: var(--brand); }
+    .kpi-icon.success { background: var(--success-weak); color: var(--success); }
+    .kpi-icon.warning { background: var(--warning-weak); color: var(--warning); }
+    .kpi-icon.info    { background: var(--info-weak);    color: var(--info); }
+    .kpi-value {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -.02em;
+      color: var(--text);
+      line-height: 1.1;
+    }
+    .kpi-foot {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: var(--s-2);
+      margin-top: auto;
+    }
+    .kpi-trend {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+    .kpi-trend.up   { color: var(--success); background: var(--success-weak); }
+    .kpi-trend.down { color: var(--danger);  background: var(--danger-weak); }
+    .kpi-trend.flat { color: var(--text-muted); background: var(--surface-2); }
+    .kpi-sub { color: var(--text-subtle); font-size: 12px; }
+    .spark { width: 100%; height: 36px; display: block; }
+
+    /* ---------- Funnel ---------- */
+    .funnel { display: flex; flex-direction: column; gap: var(--s-3); }
+    .funnel-row {
+      display: grid;
+      grid-template-columns: 104px 1fr 96px;
+      gap: var(--s-3);
+      align-items: center;
+    }
+    .funnel-label {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .funnel-bar {
+      position: relative;
+      height: 26px;
+      background: var(--surface-2);
+      border-radius: var(--r-sm);
+      overflow: hidden;
+    }
+    .funnel-fill {
+      position: absolute; top: 0; left: 0; bottom: 0;
+      background: linear-gradient(90deg, var(--brand),
+                  color-mix(in srgb, var(--brand) 55%, var(--info)));
+      border-radius: var(--r-sm);
+      transition: width .6s cubic-bezier(.2,.8,.2,1);
+      display: flex; align-items: center; justify-content: flex-end;
+      padding-right: 8px;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .funnel-right {
+      display: flex; align-items: baseline; justify-content: flex-end; gap: 6px;
+    }
+    .funnel-count { font-weight: 700; font-size: 14px; }
+    .funnel-rate { color: var(--text-subtle); font-size: 11px; font-weight: 500; }
+
+    /* ---------- Action-needed list ---------- */
+    .action-list { display: flex; flex-direction: column; gap: var(--s-2); }
+    .action-item {
+      display: flex; align-items: center; gap: var(--s-3);
+      padding: var(--s-3);
+      border-radius: var(--r-md);
+      background: var(--surface-2);
+      border: 1px solid transparent;
+      transition: background .15s, border-color .15s;
+      cursor: pointer;
+    }
+    .action-item:hover {
+      background: var(--surface);
+      border-color: var(--border);
+    }
+    .action-icon {
+      width: 34px; height: 34px;
+      border-radius: 8px;
+      display: grid; place-items: center;
+      flex: 0 0 34px;
+    }
+    .action-icon.danger  { background: var(--danger-weak);  color: var(--danger); }
+    .action-icon.warning { background: var(--warning-weak); color: var(--warning); }
+    .action-icon.info    { background: var(--info-weak);    color: var(--info); }
+    .action-icon.brand   { background: var(--brand-weak);   color: var(--brand); }
+    .action-body { flex: 1; min-width: 0; }
+    .action-title {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text);
+    }
+    .action-meta {
+      color: var(--text-muted);
+      font-size: 12px;
+      margin-top: 1px;
+    }
+    .action-count {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 999px;
+      color: #fff;
+      min-width: 24px;
+      text-align: center;
+    }
+    .action-count.danger  { background: var(--danger); }
+    .action-count.warning { background: var(--warning); }
+    .action-count.info    { background: var(--info); }
+    .action-count.brand   { background: var(--brand); }
+
+    /* ---------- Candidates: filter bar & view toggle ---------- */
+    .candidates-head { flex-wrap: wrap; gap: var(--s-3); }
+    .view-toggle {
+      display: inline-flex;
+      background: var(--surface-2);
+      padding: 3px;
+      border-radius: var(--r-md);
+      border: 1px solid var(--border);
+    }
+    .view-toggle button {
+      background: transparent;
+      border: 0;
+      padding: 5px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .view-toggle button.is-active {
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: var(--shadow-1);
+    }
+    .filter-bar {
+      display: flex; align-items: center; gap: var(--s-3);
+      margin-bottom: var(--s-4);
+      flex-wrap: wrap;
+    }
+    .filter-search {
+      background: var(--surface-2);
+      border: 1px solid transparent;
+      border-radius: var(--r-md);
+      padding: 7px 12px;
+      font: inherit;
+      color: var(--text);
+      outline: 0;
+      min-width: 220px;
+    }
+    .filter-search:focus {
+      background: var(--surface);
+      border-color: var(--brand);
+    }
+    .filter-chips { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+    .chip {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      border-radius: 999px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .chip:hover { color: var(--text); }
+    .chip.is-active {
+      background: var(--brand);
+      color: #fff;
+      border-color: transparent;
+    }
+
+    /* ---------- Table ---------- */
+    .table-wrap { overflow-x: auto; }
+    .candidates-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 13px;
+      min-width: 720px;
+    }
+    .candidates-table thead th {
+      text-align: left;
+      padding: var(--s-3);
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      background: var(--surface-2);
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .candidates-table thead th:first-child {
+      border-top-left-radius: var(--r-sm);
+      border-bottom-left-radius: var(--r-sm);
+    }
+    .candidates-table thead th:last-child {
+      border-top-right-radius: var(--r-sm);
+      border-bottom-right-radius: var(--r-sm);
+    }
+    .candidates-table thead th.sorted::after {
+      content: '↓';
+      margin-left: 6px;
+      color: var(--brand);
+    }
+    .candidates-table thead th.sorted.asc::after { content: '↑'; }
+    .candidates-table tbody td {
+      padding: var(--s-3);
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .candidates-table tbody tr { transition: background .12s; }
+    .candidates-table tbody tr:hover { background: var(--surface-2); }
+
+    .avatar-sm {
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      display: inline-grid; place-items: center;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      flex: 0 0 30px;
+    }
+    .candidate-cell { display: flex; align-items: center; gap: var(--s-3); }
+    .candidate-name { font-weight: 600; color: var(--text); }
+    .candidate-role { color: var(--text-subtle); font-size: 12px; }
+
+    .status {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .status::before {
+      content: '';
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .status.applied         { background: var(--info-weak);    color: var(--info); }
+    .status.screening       { background: var(--brand-weak);   color: var(--brand); }
+    .status.interview1      { background: var(--warning-weak); color: var(--warning); }
+    .status.interview_final { background: var(--warning-weak); color: var(--danger); }
+    .status.offer           { background: var(--success-weak); color: var(--success); }
+
+    .rating { display: inline-flex; gap: 1px; color: var(--warning); }
+    .rating .off { color: var(--border); }
+
+    .days {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .days.alert { color: var(--danger); font-weight: 600; }
+
+    /* ---------- Kanban ---------- */
+    .kanban {
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: 280px;
+      gap: var(--s-3);
+      overflow-x: auto;
+      padding-bottom: var(--s-3);
+    }
+    .kanban-col {
+      background: var(--surface-2);
+      border-radius: var(--r-md);
+      padding: var(--s-3);
+      display: flex; flex-direction: column; gap: var(--s-2);
+      min-height: 200px;
+      transition: outline-color .15s;
+      outline: 2px dashed transparent;
+      outline-offset: -2px;
+    }
+    .kanban-col.drop-target { outline-color: var(--brand); }
+    .kanban-col-head {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      padding: 0 4px 6px;
+    }
+    .kanban-count {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 11px;
+      padding: 1px 7px;
+      border-radius: 999px;
+    }
+    .kanban-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      padding: var(--s-3);
+      box-shadow: var(--shadow-1);
+      cursor: grab;
+      display: flex; flex-direction: column; gap: var(--s-2);
+      transition: box-shadow .15s, transform .1s;
+    }
+    .kanban-card:hover { box-shadow: var(--shadow-2); }
+    .kanban-card:active { cursor: grabbing; }
+    .kanban-card.dragging { opacity: .4; }
+    .kanban-card-top { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+    .kanban-card-text { min-width: 0; }
+    .kanban-card-name { font-weight: 600; font-size: 13px; color: var(--text); }
+    .kanban-card-role {
+      font-size: 12px; color: var(--text-subtle);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .kanban-card-meta {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .empty {
+      text-align: center;
+      color: var(--text-subtle);
+      padding: var(--s-6) var(--s-3);
+      font-size: 13px;
+    }
+
+    /* Responsive */
+    @media (max-width: 1200px) {
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 960px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .content { padding: var(--s-4); }
+      .grid-2 { grid-template-columns: 1fr; }
+      .search { width: 160px; }
+    }
+    @media (max-width: 600px) {
+      .kpi-grid { grid-template-columns: 1fr; }
+      .funnel-row { grid-template-columns: 84px 1fr 72px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar" aria-label="サイドナビゲーション">
+      <div class="logo">
+        <div class="logo-mark">T</div>
+        <span>Takuma ATS</span>
+      </div>
+
+      <nav class="nav" aria-label="メイン">
+        <div class="nav-section">メイン</div>
+        <a class="nav-item is-active" href="#">
+          <span class="nav-icon" style="--icon: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path fill=%22%23000%22 d=%22M3 13h8V3H3v10Zm0 8h8v-6H3v6Zm10 0h8V11h-8v10Zm0-18v6h8V3h-8Z%22/></svg>')"></span>
+          ダッシュボード
+        </a>
+        <a class="nav-item" href="#">
+          <span class="nav-icon" style="--icon: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path fill=%22%23000%22 d=%22M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4 0-9 2-9 6v2h18v-2c0-4-5-6-9-6Z%22/></svg>')"></span>
+          候補者
+          <span class="nav-badge">124</span>
+        </a>
+        <a class="nav-item" href="#">
+          <span class="nav-icon" style="--icon: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path fill=%22%23000%22 d=%22M19 4h-2V2h-2v2H9V2H7v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 16H5V10h14v10Z%22/></svg>')"></span>
+          面接スケジュール
+        </a>
+        <a class="nav-item" href="#">
+          <span class="nav-icon" style="--icon: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path fill=%22%23000%22 d=%22M20 6h-4V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2Zm-10-2h4v2h-4V4Z%22/></svg>')"></span>
+          求人
+          <span class="nav-badge">8</span>
+        </a>
+        <a class="nav-item" href="#">
+          <span class="nav-icon" style="--icon: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path fill=%22%23000%22 d=%22M3 3h8v8H3V3Zm10 0h8v5h-8V3ZM3 13h5v8H3v-8Zm7 0h11v8H10v-8Zm3-3h8V8h-8v2Z%22/></svg>')"></span>
+          レポート
+        </a>
+
+        <div class="nav-section">ワークスペース</div>
+        <a class="nav-item" href="#">
+          <span class="nav-icon" style="--icon: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path fill=%22%23000%22 d=%22M16 11a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-8 0a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-2.7 0-8 1.3-8 4v3h16v-3c0-2.7-5.3-4-8-4Zm8 0h-1a6 6 0 0 1 3 5v3h6v-3c0-2.7-5.3-5-8-5Z%22/></svg>')"></span>
+          チーム
+        </a>
+        <a class="nav-item" href="#">
+          <span class="nav-icon" style="--icon: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path fill=%22%23000%22 d=%22M12 8a4 4 0 1 0 4 4 4 4 0 0 0-4-4Zm8.9 4.6 2.1 1.6-2 3.5-2.5-1a8 8 0 0 1-2 1.2l-.4 2.6h-4l-.4-2.6a8 8 0 0 1-2-1.2l-2.5 1-2-3.5 2.1-1.6a8 8 0 0 1 0-2.2L1 9.3l2-3.5 2.5 1a8 8 0 0 1 2-1.2L7.9 3h4.2l.4 2.6a8 8 0 0 1 2 1.2l2.5-1 2 3.5-2.1 1.6a8 8 0 0 1 0 1.7Z%22/></svg>')"></span>
+          設定
+        </a>
+      </nav>
+
+      <div style="margin-top: auto; padding: var(--s-3); background: var(--surface-2); border-radius: var(--r-md); font-size: 12px; color: var(--text-muted);">
+        <strong style="color: var(--text);">ヒント:</strong>
+        <kbd style="background:var(--surface);padding:1px 5px;border-radius:4px;border:1px solid var(--border);">/</kbd>
+        で候補者を瞬時に検索
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <header class="header">
+        <div>
+          <div class="crumbs">採用 &rsaquo; ダッシュボード</div>
+        </div>
+
+        <div class="header-actions">
+          <div class="search">
+            <input type="search" placeholder="候補者・求人を検索" aria-label="検索" />
+            <kbd>/</kbd>
+          </div>
+          <button class="icon-btn" id="theme-toggle" aria-label="テーマ切り替え" title="テーマ切り替え">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.5-6.5-1.4 1.4M6.9 17.1l-1.4 1.4m0-13 1.4 1.4m10.2 10.2 1.4 1.4M12 7a5 5 0 1 0 5 5 5 5 0 0 0-5-5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+          <button class="icon-btn" aria-label="通知">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2Zm6-6V11a6 6 0 0 0-5-5.9V4a1 1 0 0 0-2 0v1.1A6 6 0 0 0 6 11v5l-2 2v1h16v-1Z"/></svg>
+          </button>
+          <div class="avatar" title="あなた">TS</div>
+        </div>
+      </header>
+
+      <div class="content">
+        <section class="page-title">
+          <div>
+            <h2>ダッシュボード</h2>
+            <p>今週のチーム活動の要点をひと目で。</p>
+          </div>
+          <div style="display:flex; gap: var(--s-2);">
+            <button class="btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 4h-2V2h-2v2H9V2H7v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 16H5V10h14v10Z"/></svg>
+              今週
+            </button>
+            <button class="btn btn-primary">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2Z"/></svg>
+              候補者を追加
+            </button>
+          </div>
+        </section>
+
+        <!-- KPI cards -->
+        <section id="kpis" aria-label="KPI">
+          <div class="kpi-grid">
+            <article class="kpi">
+              <div class="kpi-head">
+                <span class="kpi-icon brand" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2Z"/></svg>
+                </span>
+                新規応募
+              </div>
+              <div class="kpi-value">42</div>
+              <svg class="spark" viewBox="0 0 100 36" preserveAspectRatio="none" aria-hidden="true">
+                <polyline fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                  points="0,28 14,22 28,24 42,16 56,18 70,10 84,12 100,6" />
+              </svg>
+              <div class="kpi-foot">
+                <span class="kpi-trend up">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M7 14l5-5 5 5H7Z"/></svg>
+                  12%
+                </span>
+                <span class="kpi-sub">先週比</span>
+              </div>
+            </article>
+
+            <article class="kpi">
+              <div class="kpi-head">
+                <span class="kpi-icon info" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4 0-9 2-9 6v2h18v-2c0-4-5-6-9-6Z"/></svg>
+                </span>
+                選考中
+              </div>
+              <div class="kpi-value">87</div>
+              <svg class="spark" viewBox="0 0 100 36" preserveAspectRatio="none" aria-hidden="true">
+                <polyline fill="none" stroke="var(--info)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                  points="0,20 14,18 28,22 42,20 56,16 70,18 84,14 100,16" />
+              </svg>
+              <div class="kpi-foot">
+                <span class="kpi-trend up">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M7 14l5-5 5 5H7Z"/></svg>
+                  3%
+                </span>
+                <span class="kpi-sub">先週比</span>
+              </div>
+            </article>
+
+            <article class="kpi">
+              <div class="kpi-head">
+                <span class="kpi-icon success" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19l12-12-1.4-1.4L9 16.2Z"/></svg>
+                </span>
+                内定承諾率
+              </div>
+              <div class="kpi-value">68<span style="font-size:18px;color:var(--text-muted);margin-left:2px;">%</span></div>
+              <svg class="spark" viewBox="0 0 100 36" preserveAspectRatio="none" aria-hidden="true">
+                <polyline fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                  points="0,10 14,14 28,12 42,18 56,16 70,22 84,18 100,20" />
+              </svg>
+              <div class="kpi-foot">
+                <span class="kpi-trend down">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7Z"/></svg>
+                  4%
+                </span>
+                <span class="kpi-sub">先月比</span>
+              </div>
+            </article>
+
+            <article class="kpi">
+              <div class="kpi-head">
+                <span class="kpi-icon warning" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 10V6h-2v8h6v-2Z"/></svg>
+                </span>
+                平均リードタイム
+              </div>
+              <div class="kpi-value">18<span style="font-size:18px;color:var(--text-muted);margin-left:2px;">日</span></div>
+              <svg class="spark" viewBox="0 0 100 36" preserveAspectRatio="none" aria-hidden="true">
+                <polyline fill="none" stroke="var(--warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                  points="0,14 14,16 28,12 42,18 56,20 70,22 84,26 100,24" />
+              </svg>
+              <div class="kpi-foot">
+                <span class="kpi-trend up">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7Z"/></svg>
+                  2日短縮
+                </span>
+                <span class="kpi-sub">先月比</span>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <div class="grid-2">
+          <!-- Funnel -->
+          <section id="funnel" class="section" aria-label="選考ファネル">
+            <div class="section-head">
+              <h3>選考ファネル（今月）</h3>
+              <button class="link-btn" type="button">詳細を見る</button>
+            </div>
+            <div class="funnel" id="funnel-chart">
+              <!-- Rows populated by JS; width % = count / max -->
+            </div>
+          </section>
+
+          <!-- Action needed -->
+          <section id="action-needed" class="section" aria-label="要対応">
+            <div class="section-head">
+              <h3>要対応</h3>
+              <span class="kpi-sub">16件</span>
+            </div>
+            <div class="action-list">
+              <a class="action-item" href="#">
+                <span class="action-icon danger" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21Zm12-3h-2v-2h2v2Zm0-4h-2v-4h2v4Z"/></svg>
+                </span>
+                <div class="action-body">
+                  <div class="action-title">5日以上未対応の候補者</div>
+                  <div class="action-meta">返答待ち・ステータス滞留中</div>
+                </div>
+                <span class="action-count danger">7</span>
+              </a>
+
+              <a class="action-item" href="#">
+                <span class="action-icon warning" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19 4h-2V2h-2v2H9V2H7v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 16H5V10h14v10Z"/></svg>
+                </span>
+                <div class="action-body">
+                  <div class="action-title">本日の面接</div>
+                  <div class="action-meta">14:00 佐藤・16:30 鈴木・18:00 田中</div>
+                </div>
+                <span class="action-count warning">3</span>
+              </a>
+
+              <a class="action-item" href="#">
+                <span class="action-icon info" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2Z"/></svg>
+                </span>
+                <div class="action-body">
+                  <div class="action-title">未返信メッセージ</div>
+                  <div class="action-meta">候補者・紹介会社からの問い合わせ</div>
+                </div>
+                <span class="action-count info">4</span>
+              </a>
+
+              <a class="action-item" href="#">
+                <span class="action-icon brand" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm-1 7V3.5L18.5 9H13Z"/></svg>
+                </span>
+                <div class="action-body">
+                  <div class="action-title">評価シート未提出</div>
+                  <div class="action-meta">面接官からの評価待ち</div>
+                </div>
+                <span class="action-count brand">2</span>
+              </a>
+            </div>
+          </section>
+        </div>
+
+        <section id="candidates" class="section" aria-label="候補者">
+          <div class="section-head candidates-head">
+            <h3>候補者</h3>
+            <div class="view-toggle" role="tablist" aria-label="表示切替">
+              <button type="button" data-view="table" class="is-active" role="tab">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18v4H3V4Zm0 6h18v4H3v-4Zm0 6h18v4H3v-4Z"/></svg>
+                テーブル
+              </button>
+              <button type="button" data-view="kanban" role="tab">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h6v18H3V3Zm8 0h6v12h-6V3Zm8 0h2v8h-2V3Z"/></svg>
+                カンバン
+              </button>
+            </div>
+          </div>
+
+          <div class="filter-bar">
+            <input type="search" id="cand-search" class="filter-search" placeholder="名前・職種で絞り込み…" />
+            <div class="filter-chips" id="cand-chips"></div>
+          </div>
+
+          <div id="view-table" class="table-wrap">
+            <table class="candidates-table">
+              <thead>
+                <tr>
+                  <th data-sort="name">候補者</th>
+                  <th data-sort="status">ステータス</th>
+                  <th data-sort="owner">担当</th>
+                  <th data-sort="appliedAt">応募日</th>
+                  <th>次のアクション</th>
+                  <th data-sort="rating">評価</th>
+                  <th data-sort="daysInStage">滞留</th>
+                </tr>
+              </thead>
+              <tbody id="cand-tbody"></tbody>
+            </table>
+          </div>
+
+          <div id="view-kanban" hidden>
+            <div class="kanban" id="kanban-board"></div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // Theme toggle: persists to localStorage, respects prefers-color-scheme
+    (() => {
+      const root = document.documentElement;
+      const KEY = 'takuma-theme';
+      const saved = localStorage.getItem(KEY);
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const initial = saved || (prefersDark ? 'dark' : 'light');
+      root.setAttribute('data-theme', initial);
+
+      document.getElementById('theme-toggle').addEventListener('click', () => {
+        const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        root.setAttribute('data-theme', next);
+        localStorage.setItem(KEY, next);
+      });
+
+      // Focus search with "/"
+      document.addEventListener('keydown', (e) => {
+        if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
+          e.preventDefault();
+          document.querySelector('.search input').focus();
+        }
+      });
+
+      // ---------- Funnel chart ----------
+      const funnelStages = [
+        { label: '応募',     count: 420 },
+        { label: '書類選考', count: 210 },
+        { label: '一次面接', count: 120 },
+        { label: '最終面接', count:  58 },
+        { label: '内定',     count:  24 },
+        { label: '承諾',     count:  16 },
+      ];
+      const funnelEl = document.getElementById('funnel-chart');
+      if (funnelEl) {
+        const max = funnelStages[0].count;
+        funnelEl.innerHTML = funnelStages.map((s, i) => {
+          const pct = (s.count / max) * 100;
+          const prev = i === 0 ? null : funnelStages[i - 1].count;
+          const rate = prev ? Math.round((s.count / prev) * 100) : null;
+          return `
+            <div class="funnel-row">
+              <div class="funnel-label">${s.label}</div>
+              <div class="funnel-bar">
+                <div class="funnel-fill" style="width:${pct.toFixed(1)}%"></div>
+              </div>
+              <div class="funnel-right">
+                <span class="funnel-count">${s.count.toLocaleString()}</span>
+                ${rate !== null ? `<span class="funnel-rate">${rate}%</span>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // ---------- Candidates: data, rendering, filtering, sorting, DnD ----------
+      const STATUSES = [
+        { key: 'applied',         label: '応募' },
+        { key: 'screening',       label: '書類選考' },
+        { key: 'interview1',      label: '一次面接' },
+        { key: 'interview_final', label: '最終面接' },
+        { key: 'offer',           label: '内定' },
+      ];
+      const STATUS_LABEL = Object.fromEntries(STATUSES.map(s => [s.key, s.label]));
+
+      const PALETTE = ['#ff7e5f','#6ea0ff','#4ecb82','#e6a84a','#9d8ff0','#ef6a6a','#2dbfb8','#c084fc'];
+      const pick = (i) => PALETTE[i % PALETTE.length];
+      const initials = (name) => {
+        const parts = String(name).trim().split(/\s+/);
+        return (parts[0]?.[0] || '') + (parts[1]?.[0] || '');
+      };
+      const fmtDate = (iso) => {
+        const d = new Date(iso);
+        return `${d.getMonth() + 1}/${d.getDate()}`;
+      };
+      const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+
+      const candidates = [
+        { id: 1,  name: '山田 太郎', role: 'フロントエンドエンジニア',   status: 'interview1',      owner: '佐藤', appliedAt: '2026-04-15', nextAction: '一次面接 4/25 14:00',  rating: 4, daysInStage: 3 },
+        { id: 2,  name: '鈴木 花子', role: 'プロダクトマネージャー',     status: 'interview_final', owner: '田中', appliedAt: '2026-04-08', nextAction: '最終面接 4/24 16:00',  rating: 5, daysInStage: 2 },
+        { id: 3,  name: '高橋 健',   role: 'バックエンドエンジニア',     status: 'screening',       owner: '佐藤', appliedAt: '2026-04-18', nextAction: '書類確認',             rating: 3, daysInStage: 5 },
+        { id: 4,  name: '伊藤 美咲', role: 'UIデザイナー',               status: 'offer',           owner: '山本', appliedAt: '2026-04-02', nextAction: '承諾待ち',             rating: 5, daysInStage: 1 },
+        { id: 5,  name: '渡辺 翔',   role: 'データサイエンティスト',     status: 'applied',         owner: '鈴木', appliedAt: '2026-04-21', nextAction: '初回スクリーニング',   rating: 3, daysInStage: 2 },
+        { id: 6,  name: '中村 凛',   role: 'QAエンジニア',               status: 'interview1',      owner: '田中', appliedAt: '2026-04-12', nextAction: '評価待ち',             rating: 4, daysInStage: 6 },
+        { id: 7,  name: '小林 誠',   role: 'DevOpsエンジニア',           status: 'screening',       owner: '佐藤', appliedAt: '2026-04-17', nextAction: 'コーディング課題送付', rating: 4, daysInStage: 3 },
+        { id: 8,  name: '加藤 優',   role: 'iOSエンジニア',              status: 'applied',         owner: '山本', appliedAt: '2026-04-20', nextAction: '書類確認',             rating: 3, daysInStage: 3 },
+        { id: 9,  name: '吉田 涼',   role: 'フロントエンドエンジニア',   status: 'interview_final', owner: '鈴木', appliedAt: '2026-04-05', nextAction: '最終面接 4/26 11:00',  rating: 4, daysInStage: 4 },
+        { id: 10, name: '斎藤 理沙', role: 'カスタマーサクセス',         status: 'offer',           owner: '田中', appliedAt: '2026-03-28', nextAction: '契約書送付',           rating: 5, daysInStage: 2 },
+        { id: 11, name: '松本 亮',   role: 'SRE',                        status: 'interview1',      owner: '佐藤', appliedAt: '2026-04-14', nextAction: '一次面接 4/23 18:00',  rating: 4, daysInStage: 2 },
+        { id: 12, name: '井上 葵',   role: 'UXリサーチャー',             status: 'applied',         owner: '山本', appliedAt: '2026-04-22', nextAction: '書類確認',             rating: 3, daysInStage: 1 },
+      ].map((c, i) => ({ ...c, color: pick(i) }));
+
+      const state = {
+        status: 'all',
+        query: '',
+        sort: { key: 'appliedAt', dir: 'desc' },
+        view: 'table',
+      };
+
+      function applyFilters() {
+        const q = state.query.trim().toLowerCase();
+        let list = candidates.filter((c) => {
+          if (state.status !== 'all' && c.status !== state.status) return false;
+          if (q && !(c.name.toLowerCase().includes(q) || c.role.toLowerCase().includes(q))) return false;
+          return true;
+        });
+        const { key, dir } = state.sort;
+        const mul = dir === 'asc' ? 1 : -1;
+        list.sort((a, b) => {
+          const av = a[key], bv = b[key];
+          if (av < bv) return -1 * mul;
+          if (av > bv) return  1 * mul;
+          return 0;
+        });
+        return list;
+      }
+
+      function renderRating(n) {
+        let out = '<span class="rating" aria-label="評価 ' + n + ' / 5">';
+        for (let i = 1; i <= 5; i++) {
+          out += `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" class="${i <= n ? '' : 'off'}"><path d="m12 17.3-6.2 3.7 1.6-7L2 9.2l7.2-.6L12 2l2.8 6.6 7.2.6-5.4 4.8 1.6 7Z"/></svg>`;
+        }
+        return out + '</span>';
+      }
+
+      function renderTable() {
+        const tbody = document.getElementById('cand-tbody');
+        const rows = applyFilters();
+        if (rows.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="7" class="empty">該当する候補者がいません</td></tr>`;
+          return;
+        }
+        tbody.innerHTML = rows.map((c) => `
+          <tr>
+            <td>
+              <div class="candidate-cell">
+                <span class="avatar-sm" style="background:${c.color}">${escapeHtml(initials(c.name))}</span>
+                <div>
+                  <div class="candidate-name">${escapeHtml(c.name)}</div>
+                  <div class="candidate-role">${escapeHtml(c.role)}</div>
+                </div>
+              </div>
+            </td>
+            <td><span class="status ${c.status}">${STATUS_LABEL[c.status]}</span></td>
+            <td>${escapeHtml(c.owner)}</td>
+            <td>${fmtDate(c.appliedAt)}</td>
+            <td>${escapeHtml(c.nextAction)}</td>
+            <td>${renderRating(c.rating)}</td>
+            <td><span class="days${c.daysInStage >= 5 ? ' alert' : ''}">${c.daysInStage}日</span></td>
+          </tr>
+        `).join('');
+
+        document.querySelectorAll('.candidates-table thead th').forEach((th) => {
+          th.classList.remove('sorted', 'asc');
+          if (th.dataset.sort === state.sort.key) {
+            th.classList.add('sorted');
+            if (state.sort.dir === 'asc') th.classList.add('asc');
+          }
+        });
+      }
+
+      function renderKanban() {
+        const board = document.getElementById('kanban-board');
+        const filtered = applyFilters();
+        board.innerHTML = STATUSES.map((s) => {
+          const items = filtered.filter((c) => c.status === s.key);
+          const cards = items.length === 0
+            ? `<div class="empty" style="padding:var(--s-4);">候補者なし</div>`
+            : items.map((c) => `
+              <div class="kanban-card" draggable="true" data-id="${c.id}">
+                <div class="kanban-card-top">
+                  <span class="avatar-sm" style="background:${c.color}">${escapeHtml(initials(c.name))}</span>
+                  <div class="kanban-card-text">
+                    <div class="kanban-card-name">${escapeHtml(c.name)}</div>
+                    <div class="kanban-card-role">${escapeHtml(c.role)}</div>
+                  </div>
+                </div>
+                <div class="kanban-card-meta">
+                  <span>担当: ${escapeHtml(c.owner)}</span>
+                  <span class="days${c.daysInStage >= 5 ? ' alert' : ''}">${c.daysInStage}日</span>
+                </div>
+              </div>
+            `).join('');
+          return `
+            <div class="kanban-col" data-status="${s.key}">
+              <div class="kanban-col-head">
+                <span>${s.label}</span>
+                <span class="kanban-count">${items.length}</span>
+              </div>
+              ${cards}
+            </div>
+          `;
+        }).join('');
+        attachDnD();
+      }
+
+      function render() {
+        if (state.view === 'table') renderTable();
+        else renderKanban();
+      }
+
+      // Filter chips
+      const chipsEl = document.getElementById('cand-chips');
+      const chipItems = [{ key: 'all', label: 'すべて' }, ...STATUSES];
+      chipsEl.innerHTML = chipItems.map((s) =>
+        `<button type="button" class="chip${s.key === 'all' ? ' is-active' : ''}" data-status="${s.key}">${s.label}</button>`
+      ).join('');
+      chipsEl.addEventListener('click', (e) => {
+        const btn = e.target.closest('.chip');
+        if (!btn) return;
+        state.status = btn.dataset.status;
+        chipsEl.querySelectorAll('.chip').forEach((c) => c.classList.toggle('is-active', c === btn));
+        render();
+      });
+
+      // Search
+      document.getElementById('cand-search').addEventListener('input', (e) => {
+        state.query = e.target.value;
+        render();
+      });
+
+      // Sort
+      document.querySelectorAll('.candidates-table thead th[data-sort]').forEach((th) => {
+        th.addEventListener('click', () => {
+          const key = th.dataset.sort;
+          if (state.sort.key === key) {
+            state.sort.dir = state.sort.dir === 'asc' ? 'desc' : 'asc';
+          } else {
+            state.sort.key = key;
+            state.sort.dir = 'asc';
+          }
+          if (state.view === 'table') renderTable();
+        });
+      });
+
+      // View toggle
+      document.querySelectorAll('.view-toggle button').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          state.view = btn.dataset.view;
+          document.querySelectorAll('.view-toggle button').forEach((b) =>
+            b.classList.toggle('is-active', b === btn));
+          document.getElementById('view-table').hidden = state.view !== 'table';
+          document.getElementById('view-kanban').hidden = state.view !== 'kanban';
+          render();
+        });
+      });
+
+      // Drag and drop between kanban columns
+      function attachDnD() {
+        let dragId = null;
+        document.querySelectorAll('.kanban-card').forEach((card) => {
+          card.addEventListener('dragstart', (e) => {
+            dragId = Number(card.dataset.id);
+            card.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+          });
+          card.addEventListener('dragend', () => {
+            card.classList.remove('dragging');
+            document.querySelectorAll('.kanban-col.drop-target')
+              .forEach((c) => c.classList.remove('drop-target'));
+          });
+        });
+        document.querySelectorAll('.kanban-col').forEach((col) => {
+          col.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            col.classList.add('drop-target');
+          });
+          col.addEventListener('dragleave', () => col.classList.remove('drop-target'));
+          col.addEventListener('drop', (e) => {
+            e.preventDefault();
+            col.classList.remove('drop-target');
+            const target = col.dataset.status;
+            const c = candidates.find((x) => x.id === dragId);
+            if (c && c.status !== target) {
+              c.status = target;
+              c.daysInStage = 0;
+              render();
+            }
+          });
+        });
+      }
+
+      render();
+    })();
+  </script>
+</body>
+</html>
