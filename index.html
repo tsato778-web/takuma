@@ -492,6 +492,225 @@
     .action-count.info    { background: var(--info); }
     .action-count.brand   { background: var(--brand); }
 
+    /* ---------- Candidates: filter bar & view toggle ---------- */
+    .candidates-head { flex-wrap: wrap; gap: var(--s-3); }
+    .view-toggle {
+      display: inline-flex;
+      background: var(--surface-2);
+      padding: 3px;
+      border-radius: var(--r-md);
+      border: 1px solid var(--border);
+    }
+    .view-toggle button {
+      background: transparent;
+      border: 0;
+      padding: 5px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .view-toggle button.is-active {
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: var(--shadow-1);
+    }
+    .filter-bar {
+      display: flex; align-items: center; gap: var(--s-3);
+      margin-bottom: var(--s-4);
+      flex-wrap: wrap;
+    }
+    .filter-search {
+      background: var(--surface-2);
+      border: 1px solid transparent;
+      border-radius: var(--r-md);
+      padding: 7px 12px;
+      font: inherit;
+      color: var(--text);
+      outline: 0;
+      min-width: 220px;
+    }
+    .filter-search:focus {
+      background: var(--surface);
+      border-color: var(--brand);
+    }
+    .filter-chips { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+    .chip {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      border-radius: 999px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .chip:hover { color: var(--text); }
+    .chip.is-active {
+      background: var(--brand);
+      color: #fff;
+      border-color: transparent;
+    }
+
+    /* ---------- Table ---------- */
+    .table-wrap { overflow-x: auto; }
+    .candidates-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 13px;
+      min-width: 720px;
+    }
+    .candidates-table thead th {
+      text-align: left;
+      padding: var(--s-3);
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      background: var(--surface-2);
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .candidates-table thead th:first-child {
+      border-top-left-radius: var(--r-sm);
+      border-bottom-left-radius: var(--r-sm);
+    }
+    .candidates-table thead th:last-child {
+      border-top-right-radius: var(--r-sm);
+      border-bottom-right-radius: var(--r-sm);
+    }
+    .candidates-table thead th.sorted::after {
+      content: '↓';
+      margin-left: 6px;
+      color: var(--brand);
+    }
+    .candidates-table thead th.sorted.asc::after { content: '↑'; }
+    .candidates-table tbody td {
+      padding: var(--s-3);
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .candidates-table tbody tr { transition: background .12s; }
+    .candidates-table tbody tr:hover { background: var(--surface-2); }
+
+    .avatar-sm {
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      display: inline-grid; place-items: center;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      flex: 0 0 30px;
+    }
+    .candidate-cell { display: flex; align-items: center; gap: var(--s-3); }
+    .candidate-name { font-weight: 600; color: var(--text); }
+    .candidate-role { color: var(--text-subtle); font-size: 12px; }
+
+    .status {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .status::before {
+      content: '';
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .status.applied         { background: var(--info-weak);    color: var(--info); }
+    .status.screening       { background: var(--brand-weak);   color: var(--brand); }
+    .status.interview1      { background: var(--warning-weak); color: var(--warning); }
+    .status.interview_final { background: var(--warning-weak); color: var(--danger); }
+    .status.offer           { background: var(--success-weak); color: var(--success); }
+
+    .rating { display: inline-flex; gap: 1px; color: var(--warning); }
+    .rating .off { color: var(--border); }
+
+    .days {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .days.alert { color: var(--danger); font-weight: 600; }
+
+    /* ---------- Kanban ---------- */
+    .kanban {
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: 280px;
+      gap: var(--s-3);
+      overflow-x: auto;
+      padding-bottom: var(--s-3);
+    }
+    .kanban-col {
+      background: var(--surface-2);
+      border-radius: var(--r-md);
+      padding: var(--s-3);
+      display: flex; flex-direction: column; gap: var(--s-2);
+      min-height: 200px;
+      transition: outline-color .15s;
+      outline: 2px dashed transparent;
+      outline-offset: -2px;
+    }
+    .kanban-col.drop-target { outline-color: var(--brand); }
+    .kanban-col-head {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      padding: 0 4px 6px;
+    }
+    .kanban-count {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 11px;
+      padding: 1px 7px;
+      border-radius: 999px;
+    }
+    .kanban-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      padding: var(--s-3);
+      box-shadow: var(--shadow-1);
+      cursor: grab;
+      display: flex; flex-direction: column; gap: var(--s-2);
+      transition: box-shadow .15s, transform .1s;
+    }
+    .kanban-card:hover { box-shadow: var(--shadow-2); }
+    .kanban-card:active { cursor: grabbing; }
+    .kanban-card.dragging { opacity: .4; }
+    .kanban-card-top { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+    .kanban-card-text { min-width: 0; }
+    .kanban-card-name { font-weight: 600; font-size: 13px; color: var(--text); }
+    .kanban-card-role {
+      font-size: 12px; color: var(--text-subtle);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .kanban-card-meta {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .empty {
+      text-align: center;
+      color: var(--text-subtle);
+      padding: var(--s-6) var(--s-3);
+      font-size: 13px;
+    }
+
     /* Responsive */
     @media (max-width: 1200px) {
       .kpi-grid { grid-template-columns: repeat(2, 1fr); }
@@ -757,8 +976,45 @@
         </div>
 
         <section id="candidates" class="section" aria-label="候補者">
-          <h3>候補者</h3>
-          <div class="placeholder">ステップ3でテーブル・カンバンを実装</div>
+          <div class="section-head candidates-head">
+            <h3>候補者</h3>
+            <div class="view-toggle" role="tablist" aria-label="表示切替">
+              <button type="button" data-view="table" class="is-active" role="tab">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18v4H3V4Zm0 6h18v4H3v-4Zm0 6h18v4H3v-4Z"/></svg>
+                テーブル
+              </button>
+              <button type="button" data-view="kanban" role="tab">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h6v18H3V3Zm8 0h6v12h-6V3Zm8 0h2v8h-2V3Z"/></svg>
+                カンバン
+              </button>
+            </div>
+          </div>
+
+          <div class="filter-bar">
+            <input type="search" id="cand-search" class="filter-search" placeholder="名前・職種で絞り込み…" />
+            <div class="filter-chips" id="cand-chips"></div>
+          </div>
+
+          <div id="view-table" class="table-wrap">
+            <table class="candidates-table">
+              <thead>
+                <tr>
+                  <th data-sort="name">候補者</th>
+                  <th data-sort="status">ステータス</th>
+                  <th data-sort="owner">担当</th>
+                  <th data-sort="appliedAt">応募日</th>
+                  <th>次のアクション</th>
+                  <th data-sort="rating">評価</th>
+                  <th data-sort="daysInStage">滞留</th>
+                </tr>
+              </thead>
+              <tbody id="cand-tbody"></tbody>
+            </table>
+          </div>
+
+          <div id="view-kanban" hidden>
+            <div class="kanban" id="kanban-board"></div>
+          </div>
         </section>
       </div>
     </main>
@@ -818,6 +1074,237 @@
           `;
         }).join('');
       }
+
+      // ---------- Candidates: data, rendering, filtering, sorting, DnD ----------
+      const STATUSES = [
+        { key: 'applied',         label: '応募' },
+        { key: 'screening',       label: '書類選考' },
+        { key: 'interview1',      label: '一次面接' },
+        { key: 'interview_final', label: '最終面接' },
+        { key: 'offer',           label: '内定' },
+      ];
+      const STATUS_LABEL = Object.fromEntries(STATUSES.map(s => [s.key, s.label]));
+
+      const PALETTE = ['#ff7e5f','#6ea0ff','#4ecb82','#e6a84a','#9d8ff0','#ef6a6a','#2dbfb8','#c084fc'];
+      const pick = (i) => PALETTE[i % PALETTE.length];
+      const initials = (name) => {
+        const parts = String(name).trim().split(/\s+/);
+        return (parts[0]?.[0] || '') + (parts[1]?.[0] || '');
+      };
+      const fmtDate = (iso) => {
+        const d = new Date(iso);
+        return `${d.getMonth() + 1}/${d.getDate()}`;
+      };
+      const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+
+      const candidates = [
+        { id: 1,  name: '山田 太郎', role: 'フロントエンドエンジニア',   status: 'interview1',      owner: '佐藤', appliedAt: '2026-04-15', nextAction: '一次面接 4/25 14:00',  rating: 4, daysInStage: 3 },
+        { id: 2,  name: '鈴木 花子', role: 'プロダクトマネージャー',     status: 'interview_final', owner: '田中', appliedAt: '2026-04-08', nextAction: '最終面接 4/24 16:00',  rating: 5, daysInStage: 2 },
+        { id: 3,  name: '高橋 健',   role: 'バックエンドエンジニア',     status: 'screening',       owner: '佐藤', appliedAt: '2026-04-18', nextAction: '書類確認',             rating: 3, daysInStage: 5 },
+        { id: 4,  name: '伊藤 美咲', role: 'UIデザイナー',               status: 'offer',           owner: '山本', appliedAt: '2026-04-02', nextAction: '承諾待ち',             rating: 5, daysInStage: 1 },
+        { id: 5,  name: '渡辺 翔',   role: 'データサイエンティスト',     status: 'applied',         owner: '鈴木', appliedAt: '2026-04-21', nextAction: '初回スクリーニング',   rating: 3, daysInStage: 2 },
+        { id: 6,  name: '中村 凛',   role: 'QAエンジニア',               status: 'interview1',      owner: '田中', appliedAt: '2026-04-12', nextAction: '評価待ち',             rating: 4, daysInStage: 6 },
+        { id: 7,  name: '小林 誠',   role: 'DevOpsエンジニア',           status: 'screening',       owner: '佐藤', appliedAt: '2026-04-17', nextAction: 'コーディング課題送付', rating: 4, daysInStage: 3 },
+        { id: 8,  name: '加藤 優',   role: 'iOSエンジニア',              status: 'applied',         owner: '山本', appliedAt: '2026-04-20', nextAction: '書類確認',             rating: 3, daysInStage: 3 },
+        { id: 9,  name: '吉田 涼',   role: 'フロントエンドエンジニア',   status: 'interview_final', owner: '鈴木', appliedAt: '2026-04-05', nextAction: '最終面接 4/26 11:00',  rating: 4, daysInStage: 4 },
+        { id: 10, name: '斎藤 理沙', role: 'カスタマーサクセス',         status: 'offer',           owner: '田中', appliedAt: '2026-03-28', nextAction: '契約書送付',           rating: 5, daysInStage: 2 },
+        { id: 11, name: '松本 亮',   role: 'SRE',                        status: 'interview1',      owner: '佐藤', appliedAt: '2026-04-14', nextAction: '一次面接 4/23 18:00',  rating: 4, daysInStage: 2 },
+        { id: 12, name: '井上 葵',   role: 'UXリサーチャー',             status: 'applied',         owner: '山本', appliedAt: '2026-04-22', nextAction: '書類確認',             rating: 3, daysInStage: 1 },
+      ].map((c, i) => ({ ...c, color: pick(i) }));
+
+      const state = {
+        status: 'all',
+        query: '',
+        sort: { key: 'appliedAt', dir: 'desc' },
+        view: 'table',
+      };
+
+      function applyFilters() {
+        const q = state.query.trim().toLowerCase();
+        let list = candidates.filter((c) => {
+          if (state.status !== 'all' && c.status !== state.status) return false;
+          if (q && !(c.name.toLowerCase().includes(q) || c.role.toLowerCase().includes(q))) return false;
+          return true;
+        });
+        const { key, dir } = state.sort;
+        const mul = dir === 'asc' ? 1 : -1;
+        list.sort((a, b) => {
+          const av = a[key], bv = b[key];
+          if (av < bv) return -1 * mul;
+          if (av > bv) return  1 * mul;
+          return 0;
+        });
+        return list;
+      }
+
+      function renderRating(n) {
+        let out = '<span class="rating" aria-label="評価 ' + n + ' / 5">';
+        for (let i = 1; i <= 5; i++) {
+          out += `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" class="${i <= n ? '' : 'off'}"><path d="m12 17.3-6.2 3.7 1.6-7L2 9.2l7.2-.6L12 2l2.8 6.6 7.2.6-5.4 4.8 1.6 7Z"/></svg>`;
+        }
+        return out + '</span>';
+      }
+
+      function renderTable() {
+        const tbody = document.getElementById('cand-tbody');
+        const rows = applyFilters();
+        if (rows.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="7" class="empty">該当する候補者がいません</td></tr>`;
+          return;
+        }
+        tbody.innerHTML = rows.map((c) => `
+          <tr>
+            <td>
+              <div class="candidate-cell">
+                <span class="avatar-sm" style="background:${c.color}">${escapeHtml(initials(c.name))}</span>
+                <div>
+                  <div class="candidate-name">${escapeHtml(c.name)}</div>
+                  <div class="candidate-role">${escapeHtml(c.role)}</div>
+                </div>
+              </div>
+            </td>
+            <td><span class="status ${c.status}">${STATUS_LABEL[c.status]}</span></td>
+            <td>${escapeHtml(c.owner)}</td>
+            <td>${fmtDate(c.appliedAt)}</td>
+            <td>${escapeHtml(c.nextAction)}</td>
+            <td>${renderRating(c.rating)}</td>
+            <td><span class="days${c.daysInStage >= 5 ? ' alert' : ''}">${c.daysInStage}日</span></td>
+          </tr>
+        `).join('');
+
+        document.querySelectorAll('.candidates-table thead th').forEach((th) => {
+          th.classList.remove('sorted', 'asc');
+          if (th.dataset.sort === state.sort.key) {
+            th.classList.add('sorted');
+            if (state.sort.dir === 'asc') th.classList.add('asc');
+          }
+        });
+      }
+
+      function renderKanban() {
+        const board = document.getElementById('kanban-board');
+        const filtered = applyFilters();
+        board.innerHTML = STATUSES.map((s) => {
+          const items = filtered.filter((c) => c.status === s.key);
+          const cards = items.length === 0
+            ? `<div class="empty" style="padding:var(--s-4);">候補者なし</div>`
+            : items.map((c) => `
+              <div class="kanban-card" draggable="true" data-id="${c.id}">
+                <div class="kanban-card-top">
+                  <span class="avatar-sm" style="background:${c.color}">${escapeHtml(initials(c.name))}</span>
+                  <div class="kanban-card-text">
+                    <div class="kanban-card-name">${escapeHtml(c.name)}</div>
+                    <div class="kanban-card-role">${escapeHtml(c.role)}</div>
+                  </div>
+                </div>
+                <div class="kanban-card-meta">
+                  <span>担当: ${escapeHtml(c.owner)}</span>
+                  <span class="days${c.daysInStage >= 5 ? ' alert' : ''}">${c.daysInStage}日</span>
+                </div>
+              </div>
+            `).join('');
+          return `
+            <div class="kanban-col" data-status="${s.key}">
+              <div class="kanban-col-head">
+                <span>${s.label}</span>
+                <span class="kanban-count">${items.length}</span>
+              </div>
+              ${cards}
+            </div>
+          `;
+        }).join('');
+        attachDnD();
+      }
+
+      function render() {
+        if (state.view === 'table') renderTable();
+        else renderKanban();
+      }
+
+      // Filter chips
+      const chipsEl = document.getElementById('cand-chips');
+      const chipItems = [{ key: 'all', label: 'すべて' }, ...STATUSES];
+      chipsEl.innerHTML = chipItems.map((s) =>
+        `<button type="button" class="chip${s.key === 'all' ? ' is-active' : ''}" data-status="${s.key}">${s.label}</button>`
+      ).join('');
+      chipsEl.addEventListener('click', (e) => {
+        const btn = e.target.closest('.chip');
+        if (!btn) return;
+        state.status = btn.dataset.status;
+        chipsEl.querySelectorAll('.chip').forEach((c) => c.classList.toggle('is-active', c === btn));
+        render();
+      });
+
+      // Search
+      document.getElementById('cand-search').addEventListener('input', (e) => {
+        state.query = e.target.value;
+        render();
+      });
+
+      // Sort
+      document.querySelectorAll('.candidates-table thead th[data-sort]').forEach((th) => {
+        th.addEventListener('click', () => {
+          const key = th.dataset.sort;
+          if (state.sort.key === key) {
+            state.sort.dir = state.sort.dir === 'asc' ? 'desc' : 'asc';
+          } else {
+            state.sort.key = key;
+            state.sort.dir = 'asc';
+          }
+          if (state.view === 'table') renderTable();
+        });
+      });
+
+      // View toggle
+      document.querySelectorAll('.view-toggle button').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          state.view = btn.dataset.view;
+          document.querySelectorAll('.view-toggle button').forEach((b) =>
+            b.classList.toggle('is-active', b === btn));
+          document.getElementById('view-table').hidden = state.view !== 'table';
+          document.getElementById('view-kanban').hidden = state.view !== 'kanban';
+          render();
+        });
+      });
+
+      // Drag and drop between kanban columns
+      function attachDnD() {
+        let dragId = null;
+        document.querySelectorAll('.kanban-card').forEach((card) => {
+          card.addEventListener('dragstart', (e) => {
+            dragId = Number(card.dataset.id);
+            card.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+          });
+          card.addEventListener('dragend', () => {
+            card.classList.remove('dragging');
+            document.querySelectorAll('.kanban-col.drop-target')
+              .forEach((c) => c.classList.remove('drop-target'));
+          });
+        });
+        document.querySelectorAll('.kanban-col').forEach((col) => {
+          col.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            col.classList.add('drop-target');
+          });
+          col.addEventListener('dragleave', () => col.classList.remove('drop-target'));
+          col.addEventListener('drop', (e) => {
+            e.preventDefault();
+            col.classList.remove('drop-target');
+            const target = col.dataset.status;
+            const c = candidates.find((x) => x.id === dragId);
+            if (c && c.status !== target) {
+              c.status = target;
+              c.daysInStage = 0;
+              render();
+            }
+          });
+        });
+      }
+
+      render();
     })();
   </script>
 </body>
