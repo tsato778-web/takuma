@@ -1,1 +1,750 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NAORU技術アカデミー ダッシュボード</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --surface: #ffffff;
+      --surface-2: #fafbfd;
+      --border: #e6eaf2;
+      --text: #1a2233;
+      --text-muted: #6b7389;
+      --primary: #2563eb;
+      --primary-soft: #e0ebff;
+      --accent: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 12px;
+      --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+    }
 
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans",
+        "Noto Sans JP", "Yu Gothic UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      min-height: 100vh;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 24px 16px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 4px 8px 20px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+
+    .brand-logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #2563eb 0%, #10b981 100%);
+      display: grid;
+      place-items: center;
+      color: white;
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 0.5px;
+    }
+
+    .brand-name {
+      font-weight: 700;
+      font-size: 14px;
+      line-height: 1.3;
+    }
+
+    .brand-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .nav { display: flex; flex-direction: column; gap: 2px; }
+
+    .nav a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      color: var(--text-muted);
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .nav a:hover { background: var(--surface-2); color: var(--text); }
+
+    .nav a.active {
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    .nav-icon {
+      width: 18px;
+      height: 18px;
+      display: inline-block;
+      opacity: 0.9;
+    }
+
+    .nav-section {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      padding: 20px 12px 8px;
+    }
+
+    /* Main */
+    .main {
+      padding: 28px 32px 48px;
+      overflow-x: hidden;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .page-title h1 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: -0.01em;
+    }
+
+    .page-title p {
+      margin: 4px 0 0;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .topbar-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .search {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 13px;
+      min-width: 240px;
+    }
+
+    .search input {
+      border: none;
+      outline: none;
+      background: transparent;
+      flex: 1;
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    .btn {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 13px;
+      cursor: pointer;
+      color: var(--text);
+      font-weight: 500;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .btn:hover { background: var(--surface-2); }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .btn-primary:hover { background: #1d4ed8; }
+
+    .avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #60a5fa, #34d399);
+      color: white;
+      display: grid;
+      place-items: center;
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    /* Stat cards */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .stat-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--text-muted);
+      font-size: 13px;
+      margin-bottom: 10px;
+    }
+
+    .stat-value {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .stat-delta {
+      font-size: 12px;
+      margin-top: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .delta-up { color: var(--accent); }
+    .delta-down { color: var(--danger); }
+
+    .stat-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      font-size: 16px;
+    }
+
+    /* Grid layout for main content */
+    .grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .section-title {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .link {
+      color: var(--primary);
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    /* Chart */
+    .chart-wrap { height: 220px; }
+
+    /* Courses */
+    .course-list { display: flex; flex-direction: column; gap: 12px; }
+
+    .course {
+      display: grid;
+      grid-template-columns: 44px 1fr auto;
+      gap: 14px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface-2);
+    }
+
+    .course-thumb {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      color: white;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .course-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0 0 4px;
+    }
+
+    .course-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .progress {
+      width: 140px;
+      text-align: right;
+    }
+
+    .progress-bar {
+      height: 6px;
+      background: var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+      margin-top: 6px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary), #60a5fa);
+    }
+
+    .progress-text {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Schedule */
+    .schedule-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .sched-item {
+      display: grid;
+      grid-template-columns: 56px 1fr;
+      gap: 12px;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+
+    .sched-date {
+      background: var(--primary-soft);
+      color: var(--primary);
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 6px;
+      font-weight: 600;
+    }
+
+    .sched-date .d { font-size: 16px; line-height: 1; }
+    .sched-date .m { font-size: 10px; margin-top: 2px; letter-spacing: 0.05em; }
+
+    .sched-title { font-size: 13px; font-weight: 600; margin: 2px 0 4px; }
+    .sched-meta { font-size: 12px; color: var(--text-muted); }
+
+    /* Announcements */
+    .announce-list { display: flex; flex-direction: column; gap: 12px; }
+
+    .announce {
+      padding: 12px;
+      border-left: 3px solid var(--primary);
+      background: var(--surface-2);
+      border-radius: 0 8px 8px 0;
+    }
+
+    .announce-title { font-size: 13px; font-weight: 600; margin: 0 0 4px; }
+    .announce-body { font-size: 12px; color: var(--text-muted); margin: 0 0 6px; }
+    .announce-time { font-size: 11px; color: var(--text-muted); }
+
+    .tag {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-weight: 500;
+    }
+
+    .tag-info { background: #e0ebff; color: var(--primary); }
+    .tag-success { background: #d1fae5; color: #047857; }
+    .tag-warning { background: #fef3c7; color: #b45309; }
+
+    /* Footer credits */
+    .footer {
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 24px;
+    }
+
+    @media (max-width: 960px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { position: static; height: auto; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .grid { grid-template-columns: 1fr; }
+      .search { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">N</div>
+        <div>
+          <div class="brand-name">NAORU技術アカデミー</div>
+          <div class="brand-sub">Admin Dashboard</div>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <a href="#" class="active">
+          <span class="nav-icon">🏠</span> ダッシュボード
+        </a>
+        <a href="#"><span class="nav-icon">📚</span> コース</a>
+        <a href="#"><span class="nav-icon">👩‍🎓</span> 受講生</a>
+        <a href="#"><span class="nav-icon">👨‍🏫</span> 講師</a>
+        <a href="#"><span class="nav-icon">📅</span> スケジュール</a>
+        <a href="#"><span class="nav-icon">📝</span> 課題・評価</a>
+
+        <div class="nav-section">管理</div>
+        <a href="#"><span class="nav-icon">📊</span> レポート</a>
+        <a href="#"><span class="nav-icon">💳</span> 請求</a>
+        <a href="#"><span class="nav-icon">⚙️</span> 設定</a>
+      </nav>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <div class="topbar">
+        <div class="page-title">
+          <h1>こんにちは、佐藤さん 👋</h1>
+          <p id="today"></p>
+        </div>
+        <div class="topbar-actions">
+          <div class="search">
+            <span>🔍</span>
+            <input type="text" placeholder="コース・受講生を検索..." />
+          </div>
+          <button class="btn">通知 🔔</button>
+          <button class="btn btn-primary">＋ 新規コース</button>
+          <div class="avatar" title="佐藤 拓真">ST</div>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <section class="stats">
+        <div class="card">
+          <div class="stat-head">
+            <span>受講生数</span>
+            <div class="stat-icon" style="background:#e0ebff;color:#2563eb">👩‍🎓</div>
+          </div>
+          <div class="stat-value">1,284</div>
+          <div class="stat-delta delta-up">▲ 8.4% 先月比</div>
+        </div>
+        <div class="card">
+          <div class="stat-head">
+            <span>開講中コース</span>
+            <div class="stat-icon" style="background:#d1fae5;color:#047857">📚</div>
+          </div>
+          <div class="stat-value">42</div>
+          <div class="stat-delta delta-up">▲ 3 今月新設</div>
+        </div>
+        <div class="card">
+          <div class="stat-head">
+            <span>修了率</span>
+            <div class="stat-icon" style="background:#fef3c7;color:#b45309">🎯</div>
+          </div>
+          <div class="stat-value">87.2%</div>
+          <div class="stat-delta delta-up">▲ 2.1pt 前期比</div>
+        </div>
+        <div class="card">
+          <div class="stat-head">
+            <span>今月の売上</span>
+            <div class="stat-icon" style="background:#fee2e2;color:#b91c1c">💰</div>
+          </div>
+          <div class="stat-value">¥18.2M</div>
+          <div class="stat-delta delta-down">▼ 1.3% 前月比</div>
+        </div>
+      </section>
+
+      <!-- Chart + Schedule -->
+      <section class="grid">
+        <div class="card">
+          <div class="section-head">
+            <div class="section-title">受講生の登録推移（過去12ヶ月）</div>
+            <span class="link">詳細を見る →</span>
+          </div>
+          <div class="chart-wrap">
+            <svg id="chart" viewBox="0 0 600 220" preserveAspectRatio="none" width="100%" height="100%"></svg>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">
+            <div class="section-title">今週の予定</div>
+            <span class="link">カレンダー</span>
+          </div>
+          <div class="schedule-list">
+            <div class="sched-item">
+              <div class="sched-date"><div class="d">24</div><div class="m">APR</div></div>
+              <div>
+                <div class="sched-title">React 実践ワークショップ</div>
+                <div class="sched-meta">14:00 - 17:00・オンライン・山田講師</div>
+              </div>
+            </div>
+            <div class="sched-item">
+              <div class="sched-date"><div class="d">25</div><div class="m">APR</div></div>
+              <div>
+                <div class="sched-title">AI基礎 特別講義</div>
+                <div class="sched-meta">10:00 - 12:00・渋谷校舎・田中講師</div>
+              </div>
+            </div>
+            <div class="sched-item">
+              <div class="sched-date"><div class="d">27</div><div class="m">APR</div></div>
+              <div>
+                <div class="sched-title">期末プロジェクト発表会</div>
+                <div class="sched-meta">13:00 - 18:00・ハイブリッド</div>
+              </div>
+            </div>
+            <div class="sched-item">
+              <div class="sched-date"><div class="d">29</div><div class="m">APR</div></div>
+              <div>
+                <div class="sched-title">講師ミーティング</div>
+                <div class="sched-meta">18:00 - 19:00・オンライン</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Courses + Announcements -->
+      <section class="grid">
+        <div class="card">
+          <div class="section-head">
+            <div class="section-title">人気のコース</div>
+            <span class="link">すべて見る</span>
+          </div>
+          <div class="course-list">
+            <div class="course">
+              <div class="course-thumb" style="background:#2563eb">JS</div>
+              <div>
+                <div class="course-title">モダンJavaScript マスター</div>
+                <div class="course-meta">全12回・受講生 212名・山田 太郎</div>
+              </div>
+              <div class="progress">
+                <div class="progress-text">進捗 78%</div>
+                <div class="progress-bar"><div class="progress-fill" style="width:78%"></div></div>
+              </div>
+            </div>
+            <div class="course">
+              <div class="course-thumb" style="background:#10b981">AI</div>
+              <div>
+                <div class="course-title">AI・機械学習入門</div>
+                <div class="course-meta">全10回・受講生 185名・田中 花子</div>
+              </div>
+              <div class="progress">
+                <div class="progress-text">進捗 65%</div>
+                <div class="progress-bar"><div class="progress-fill" style="width:65%"></div></div>
+              </div>
+            </div>
+            <div class="course">
+              <div class="course-thumb" style="background:#f59e0b">PY</div>
+              <div>
+                <div class="course-title">Python データ分析 実践</div>
+                <div class="course-meta">全8回・受講生 147名・鈴木 健太</div>
+              </div>
+              <div class="progress">
+                <div class="progress-text">進捗 92%</div>
+                <div class="progress-bar"><div class="progress-fill" style="width:92%"></div></div>
+              </div>
+            </div>
+            <div class="course">
+              <div class="course-thumb" style="background:#8b5cf6">CL</div>
+              <div>
+                <div class="course-title">クラウドインフラ AWS編</div>
+                <div class="course-meta">全6回・受講生 98名・高橋 次郎</div>
+              </div>
+              <div class="progress">
+                <div class="progress-text">進捗 45%</div>
+                <div class="progress-bar"><div class="progress-fill" style="width:45%"></div></div>
+              </div>
+            </div>
+            <div class="course">
+              <div class="course-thumb" style="background:#ef4444">SC</div>
+              <div>
+                <div class="course-title">セキュリティ実務講座</div>
+                <div class="course-meta">全5回・受講生 64名・伊藤 久美子</div>
+              </div>
+              <div class="progress">
+                <div class="progress-text">進捗 30%</div>
+                <div class="progress-bar"><div class="progress-fill" style="width:30%"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">
+            <div class="section-title">お知らせ</div>
+            <span class="link">すべて</span>
+          </div>
+          <div class="announce-list">
+            <div class="announce">
+              <div class="announce-title">
+                <span class="tag tag-info">更新</span> 2026年 夏期講座のカリキュラムを公開
+              </div>
+              <div class="announce-body">AI・クラウド・セキュリティ分野の新カリキュラムを追加しました。</div>
+              <div class="announce-time">2時間前</div>
+            </div>
+            <div class="announce">
+              <div class="announce-title">
+                <span class="tag tag-success">完了</span> 修了証発行システムを刷新
+              </div>
+              <div class="announce-body">ブロックチェーン対応の修了証発行に切り替わりました。</div>
+              <div class="announce-time">昨日</div>
+            </div>
+            <div class="announce">
+              <div class="announce-title">
+                <span class="tag tag-warning">要対応</span> 講師プロフィール未更新：3件
+              </div>
+              <div class="announce-body">プロフィール情報の更新依頼が講師に送信されています。</div>
+              <div class="announce-time">3日前</div>
+            </div>
+            <div class="announce">
+              <div class="announce-title">
+                <span class="tag tag-info">告知</span> 新年度オリエンテーション開催
+              </div>
+              <div class="announce-body">5月8日（金）14:00よりオンラインで開催予定です。</div>
+              <div class="announce-time">先週</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="footer">© 2026 NAORU技術アカデミー. All rights reserved.</div>
+    </main>
+  </div>
+
+  <script>
+    // Today's date
+    const today = new Date();
+    const weekday = ["日", "月", "火", "水", "木", "金", "土"][today.getDay()];
+    document.getElementById("today").textContent =
+      `今日は ${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日（${weekday}）です。今日も頑張りましょう！`;
+
+    // Chart: new enrollments over 12 months
+    const data = [62, 78, 85, 92, 108, 124, 132, 118, 140, 156, 168, 184];
+    const labels = ["5月","6月","7月","8月","9月","10月","11月","12月","1月","2月","3月","4月"];
+
+    const svg = document.getElementById("chart");
+    const W = 600, H = 220, P = 32;
+    const maxV = Math.max(...data) * 1.15;
+    const stepX = (W - P * 2) / (data.length - 1);
+
+    // Grid lines
+    for (let i = 0; i <= 4; i++) {
+      const y = P + ((H - P * 2) / 4) * i;
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.setAttribute("x1", P);
+      line.setAttribute("x2", W - P);
+      line.setAttribute("y1", y);
+      line.setAttribute("y2", y);
+      line.setAttribute("stroke", "#eef1f7");
+      line.setAttribute("stroke-width", "1");
+      svg.appendChild(line);
+    }
+
+    // Points
+    const pts = data.map((v, i) => {
+      const x = P + stepX * i;
+      const y = P + (H - P * 2) * (1 - v / maxV);
+      return [x, y];
+    });
+
+    // Area under line
+    const area = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    const areaD =
+      `M ${pts[0][0]} ${H - P} ` +
+      pts.map(([x, y]) => `L ${x} ${y}`).join(" ") +
+      ` L ${pts[pts.length - 1][0]} ${H - P} Z`;
+    area.setAttribute("d", areaD);
+    area.setAttribute("fill", "url(#grad)");
+    area.setAttribute("opacity", "0.25");
+    svg.appendChild(area);
+
+    // Gradient def
+    const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+    defs.innerHTML = `
+      <linearGradient id="grad" x1="0" x2="0" y1="0" y2="1">
+        <stop offset="0%" stop-color="#2563eb" />
+        <stop offset="100%" stop-color="#2563eb" stop-opacity="0" />
+      </linearGradient>
+    `;
+    svg.appendChild(defs);
+
+    // Line
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    const lineD = "M " + pts.map(([x, y]) => `${x} ${y}`).join(" L ");
+    line.setAttribute("d", lineD);
+    line.setAttribute("fill", "none");
+    line.setAttribute("stroke", "#2563eb");
+    line.setAttribute("stroke-width", "2.5");
+    line.setAttribute("stroke-linecap", "round");
+    line.setAttribute("stroke-linejoin", "round");
+    svg.appendChild(line);
+
+    // Dots & labels
+    pts.forEach(([x, y], i) => {
+      const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      c.setAttribute("cx", x);
+      c.setAttribute("cy", y);
+      c.setAttribute("r", 3.5);
+      c.setAttribute("fill", "white");
+      c.setAttribute("stroke", "#2563eb");
+      c.setAttribute("stroke-width", "2");
+      svg.appendChild(c);
+
+      const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      t.setAttribute("x", x);
+      t.setAttribute("y", H - 10);
+      t.setAttribute("text-anchor", "middle");
+      t.setAttribute("font-size", "11");
+      t.setAttribute("fill", "#6b7389");
+      t.textContent = labels[i];
+      svg.appendChild(t);
+    });
+  </script>
+</body>
+</html>
