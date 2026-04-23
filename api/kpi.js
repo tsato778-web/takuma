@@ -100,10 +100,14 @@ export default async function handler(req, res) {
   // TODO: UTAGE_API_KEY が設定されたら fetchFromUtage() に切り替える
   // if (process.env.UTAGE_API_KEY) {
   //   const data = await fetchFromUtage(academy);
-  //   return res.status(200).json(data);
+  //   return res.status(200).json({ ...data, _source: "utage" });
   // }
 
   // CDNキャッシュ（60秒）でUTAGEへの過剰アクセスを防ぐ
   res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
-  return res.status(200).json(MOCK[academy]);
+  return res.status(200).json({
+    ...MOCK[academy],
+    _source: "mock",
+    _hasApiKey: Boolean(process.env.UTAGE_API_KEY),
+  });
 }
