@@ -331,13 +331,181 @@
       gap: var(--s-5);
     }
 
+    /* Section header with action */
+    .section-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: var(--s-4);
+    }
+    .section-head h3 { margin: 0; }
+    .link-btn {
+      color: var(--brand);
+      font-size: 12px;
+      font-weight: 600;
+      background: none; border: 0; padding: 0;
+    }
+    .link-btn:hover { text-decoration: underline; }
+
+    /* ---------- KPI cards ---------- */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--s-4);
+    }
+    .kpi {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      padding: var(--s-4);
+      box-shadow: var(--shadow-1);
+      display: flex;
+      flex-direction: column;
+      gap: var(--s-2);
+      position: relative;
+      overflow: hidden;
+    }
+    .kpi-head {
+      display: flex; align-items: center; gap: var(--s-3);
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .kpi-icon {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      display: grid; place-items: center;
+      flex: 0 0 32px;
+    }
+    .kpi-icon.brand   { background: var(--brand-weak);   color: var(--brand); }
+    .kpi-icon.success { background: var(--success-weak); color: var(--success); }
+    .kpi-icon.warning { background: var(--warning-weak); color: var(--warning); }
+    .kpi-icon.info    { background: var(--info-weak);    color: var(--info); }
+    .kpi-value {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -.02em;
+      color: var(--text);
+      line-height: 1.1;
+    }
+    .kpi-foot {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: var(--s-2);
+      margin-top: auto;
+    }
+    .kpi-trend {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+    .kpi-trend.up   { color: var(--success); background: var(--success-weak); }
+    .kpi-trend.down { color: var(--danger);  background: var(--danger-weak); }
+    .kpi-trend.flat { color: var(--text-muted); background: var(--surface-2); }
+    .kpi-sub { color: var(--text-subtle); font-size: 12px; }
+    .spark { width: 100%; height: 36px; display: block; }
+
+    /* ---------- Funnel ---------- */
+    .funnel { display: flex; flex-direction: column; gap: var(--s-3); }
+    .funnel-row {
+      display: grid;
+      grid-template-columns: 104px 1fr 96px;
+      gap: var(--s-3);
+      align-items: center;
+    }
+    .funnel-label {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .funnel-bar {
+      position: relative;
+      height: 26px;
+      background: var(--surface-2);
+      border-radius: var(--r-sm);
+      overflow: hidden;
+    }
+    .funnel-fill {
+      position: absolute; top: 0; left: 0; bottom: 0;
+      background: linear-gradient(90deg, var(--brand),
+                  color-mix(in srgb, var(--brand) 55%, var(--info)));
+      border-radius: var(--r-sm);
+      transition: width .6s cubic-bezier(.2,.8,.2,1);
+      display: flex; align-items: center; justify-content: flex-end;
+      padding-right: 8px;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .funnel-right {
+      display: flex; align-items: baseline; justify-content: flex-end; gap: 6px;
+    }
+    .funnel-count { font-weight: 700; font-size: 14px; }
+    .funnel-rate { color: var(--text-subtle); font-size: 11px; font-weight: 500; }
+
+    /* ---------- Action-needed list ---------- */
+    .action-list { display: flex; flex-direction: column; gap: var(--s-2); }
+    .action-item {
+      display: flex; align-items: center; gap: var(--s-3);
+      padding: var(--s-3);
+      border-radius: var(--r-md);
+      background: var(--surface-2);
+      border: 1px solid transparent;
+      transition: background .15s, border-color .15s;
+      cursor: pointer;
+    }
+    .action-item:hover {
+      background: var(--surface);
+      border-color: var(--border);
+    }
+    .action-icon {
+      width: 34px; height: 34px;
+      border-radius: 8px;
+      display: grid; place-items: center;
+      flex: 0 0 34px;
+    }
+    .action-icon.danger  { background: var(--danger-weak);  color: var(--danger); }
+    .action-icon.warning { background: var(--warning-weak); color: var(--warning); }
+    .action-icon.info    { background: var(--info-weak);    color: var(--info); }
+    .action-icon.brand   { background: var(--brand-weak);   color: var(--brand); }
+    .action-body { flex: 1; min-width: 0; }
+    .action-title {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text);
+    }
+    .action-meta {
+      color: var(--text-muted);
+      font-size: 12px;
+      margin-top: 1px;
+    }
+    .action-count {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 999px;
+      color: #fff;
+      min-width: 24px;
+      text-align: center;
+    }
+    .action-count.danger  { background: var(--danger); }
+    .action-count.warning { background: var(--warning); }
+    .action-count.info    { background: var(--info); }
+    .action-count.brand   { background: var(--brand); }
+
     /* Responsive */
+    @media (max-width: 1200px) {
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    }
     @media (max-width: 960px) {
       .app { grid-template-columns: 1fr; }
       .sidebar { display: none; }
       .content { padding: var(--s-4); }
       .grid-2 { grid-template-columns: 1fr; }
       .search { width: 160px; }
+    }
+    @media (max-width: 600px) {
+      .kpi-grid { grid-template-columns: 1fr; }
+      .funnel-row { grid-template-columns: 84px 1fr 72px; }
     }
   </style>
 </head>
@@ -433,20 +601,158 @@
           </div>
         </section>
 
-        <!-- Placeholders populated in the next steps -->
-        <section id="kpis" class="section" aria-label="KPI">
-          <h3>主要指標</h3>
-          <div class="placeholder">ステップ2でKPIカードを実装</div>
+        <!-- KPI cards -->
+        <section id="kpis" aria-label="KPI">
+          <div class="kpi-grid">
+            <article class="kpi">
+              <div class="kpi-head">
+                <span class="kpi-icon brand" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2Z"/></svg>
+                </span>
+                新規応募
+              </div>
+              <div class="kpi-value">42</div>
+              <svg class="spark" viewBox="0 0 100 36" preserveAspectRatio="none" aria-hidden="true">
+                <polyline fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                  points="0,28 14,22 28,24 42,16 56,18 70,10 84,12 100,6" />
+              </svg>
+              <div class="kpi-foot">
+                <span class="kpi-trend up">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M7 14l5-5 5 5H7Z"/></svg>
+                  12%
+                </span>
+                <span class="kpi-sub">先週比</span>
+              </div>
+            </article>
+
+            <article class="kpi">
+              <div class="kpi-head">
+                <span class="kpi-icon info" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4 0-9 2-9 6v2h18v-2c0-4-5-6-9-6Z"/></svg>
+                </span>
+                選考中
+              </div>
+              <div class="kpi-value">87</div>
+              <svg class="spark" viewBox="0 0 100 36" preserveAspectRatio="none" aria-hidden="true">
+                <polyline fill="none" stroke="var(--info)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                  points="0,20 14,18 28,22 42,20 56,16 70,18 84,14 100,16" />
+              </svg>
+              <div class="kpi-foot">
+                <span class="kpi-trend up">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M7 14l5-5 5 5H7Z"/></svg>
+                  3%
+                </span>
+                <span class="kpi-sub">先週比</span>
+              </div>
+            </article>
+
+            <article class="kpi">
+              <div class="kpi-head">
+                <span class="kpi-icon success" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19l12-12-1.4-1.4L9 16.2Z"/></svg>
+                </span>
+                内定承諾率
+              </div>
+              <div class="kpi-value">68<span style="font-size:18px;color:var(--text-muted);margin-left:2px;">%</span></div>
+              <svg class="spark" viewBox="0 0 100 36" preserveAspectRatio="none" aria-hidden="true">
+                <polyline fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                  points="0,10 14,14 28,12 42,18 56,16 70,22 84,18 100,20" />
+              </svg>
+              <div class="kpi-foot">
+                <span class="kpi-trend down">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7Z"/></svg>
+                  4%
+                </span>
+                <span class="kpi-sub">先月比</span>
+              </div>
+            </article>
+
+            <article class="kpi">
+              <div class="kpi-head">
+                <span class="kpi-icon warning" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 10V6h-2v8h6v-2Z"/></svg>
+                </span>
+                平均リードタイム
+              </div>
+              <div class="kpi-value">18<span style="font-size:18px;color:var(--text-muted);margin-left:2px;">日</span></div>
+              <svg class="spark" viewBox="0 0 100 36" preserveAspectRatio="none" aria-hidden="true">
+                <polyline fill="none" stroke="var(--warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                  points="0,14 14,16 28,12 42,18 56,20 70,22 84,26 100,24" />
+              </svg>
+              <div class="kpi-foot">
+                <span class="kpi-trend up">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7Z"/></svg>
+                  2日短縮
+                </span>
+                <span class="kpi-sub">先月比</span>
+              </div>
+            </article>
+          </div>
         </section>
 
         <div class="grid-2">
-          <section id="funnel" class="section" aria-label="ファネル">
-            <h3>選考ファネル</h3>
-            <div class="placeholder">ステップ2でファネル可視化を実装</div>
+          <!-- Funnel -->
+          <section id="funnel" class="section" aria-label="選考ファネル">
+            <div class="section-head">
+              <h3>選考ファネル（今月）</h3>
+              <button class="link-btn" type="button">詳細を見る</button>
+            </div>
+            <div class="funnel" id="funnel-chart">
+              <!-- Rows populated by JS; width % = count / max -->
+            </div>
           </section>
+
+          <!-- Action needed -->
           <section id="action-needed" class="section" aria-label="要対応">
-            <h3>要対応</h3>
-            <div class="placeholder">ステップ2で要対応リストを実装</div>
+            <div class="section-head">
+              <h3>要対応</h3>
+              <span class="kpi-sub">16件</span>
+            </div>
+            <div class="action-list">
+              <a class="action-item" href="#">
+                <span class="action-icon danger" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21Zm12-3h-2v-2h2v2Zm0-4h-2v-4h2v4Z"/></svg>
+                </span>
+                <div class="action-body">
+                  <div class="action-title">5日以上未対応の候補者</div>
+                  <div class="action-meta">返答待ち・ステータス滞留中</div>
+                </div>
+                <span class="action-count danger">7</span>
+              </a>
+
+              <a class="action-item" href="#">
+                <span class="action-icon warning" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19 4h-2V2h-2v2H9V2H7v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 16H5V10h14v10Z"/></svg>
+                </span>
+                <div class="action-body">
+                  <div class="action-title">本日の面接</div>
+                  <div class="action-meta">14:00 佐藤・16:30 鈴木・18:00 田中</div>
+                </div>
+                <span class="action-count warning">3</span>
+              </a>
+
+              <a class="action-item" href="#">
+                <span class="action-icon info" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2Z"/></svg>
+                </span>
+                <div class="action-body">
+                  <div class="action-title">未返信メッセージ</div>
+                  <div class="action-meta">候補者・紹介会社からの問い合わせ</div>
+                </div>
+                <span class="action-count info">4</span>
+              </a>
+
+              <a class="action-item" href="#">
+                <span class="action-icon brand" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm-1 7V3.5L18.5 9H13Z"/></svg>
+                </span>
+                <div class="action-body">
+                  <div class="action-title">評価シート未提出</div>
+                  <div class="action-meta">面接官からの評価待ち</div>
+                </div>
+                <span class="action-count brand">2</span>
+              </a>
+            </div>
           </section>
         </div>
 
@@ -481,6 +787,37 @@
           document.querySelector('.search input').focus();
         }
       });
+
+      // ---------- Funnel chart ----------
+      const funnelStages = [
+        { label: '応募',     count: 420 },
+        { label: '書類選考', count: 210 },
+        { label: '一次面接', count: 120 },
+        { label: '最終面接', count:  58 },
+        { label: '内定',     count:  24 },
+        { label: '承諾',     count:  16 },
+      ];
+      const funnelEl = document.getElementById('funnel-chart');
+      if (funnelEl) {
+        const max = funnelStages[0].count;
+        funnelEl.innerHTML = funnelStages.map((s, i) => {
+          const pct = (s.count / max) * 100;
+          const prev = i === 0 ? null : funnelStages[i - 1].count;
+          const rate = prev ? Math.round((s.count / prev) * 100) : null;
+          return `
+            <div class="funnel-row">
+              <div class="funnel-label">${s.label}</div>
+              <div class="funnel-bar">
+                <div class="funnel-fill" style="width:${pct.toFixed(1)}%"></div>
+              </div>
+              <div class="funnel-right">
+                <span class="funnel-count">${s.count.toLocaleString()}</span>
+                ${rate !== null ? `<span class="funnel-rate">${rate}%</span>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
     })();
   </script>
 </body>
