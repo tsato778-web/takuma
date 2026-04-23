@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NAORU技術アカデミー ダッシュボード</title>
+  <title>NAORU アカデミー ダッシュボード</title>
   <style>
     :root {
       --bg: #f5f7fb;
@@ -142,6 +142,63 @@
       margin: 4px 0 0;
       color: var(--text-muted);
       font-size: 13px;
+    }
+
+    .academy-switcher {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      padding: 6px 8px 6px 14px;
+      box-shadow: var(--shadow);
+      margin-bottom: 10px;
+    }
+
+    .academy-switcher-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .academy-select-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .academy-select {
+      appearance: none;
+      -webkit-appearance: none;
+      border: none;
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 6px 28px 6px 14px;
+      border-radius: 99px;
+      cursor: pointer;
+      font-family: inherit;
+      outline: none;
+    }
+
+    .academy-select:focus {
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+    }
+
+    .academy-select-wrap::after {
+      content: "";
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      width: 8px;
+      height: 8px;
+      border-right: 2px solid var(--primary);
+      border-bottom: 2px solid var(--primary);
+      transform: translateY(-70%) rotate(45deg);
+      pointer-events: none;
     }
 
     .topbar-actions {
@@ -542,7 +599,7 @@
       <div class="brand">
         <div class="brand-logo">N</div>
         <div>
-          <div class="brand-name">NAORU技術アカデミー</div>
+          <div class="brand-name">NAORU アカデミー</div>
           <div class="brand-sub">Admin Dashboard</div>
         </div>
       </div>
@@ -568,7 +625,16 @@
     <main class="main">
       <div class="topbar">
         <div class="page-title">
-          <h1>こんにちは、佐藤さん 👋</h1>
+          <div class="academy-switcher">
+            <span class="academy-switcher-label">アカデミー</span>
+            <div class="academy-select-wrap">
+              <select class="academy-select" id="academy-select" aria-label="表示するアカデミーを選択">
+                <option value="tech">💻 技術アカデミー</option>
+                <option value="mgmt">📊 経営アカデミー</option>
+              </select>
+            </div>
+          </div>
+          <h1 id="page-heading">技術アカデミー ダッシュボード</h1>
           <p id="today"></p>
         </div>
         <div class="topbar-actions">
@@ -586,35 +652,35 @@
       <section class="stats">
         <div class="card">
           <div class="stat-head">
-            <span>受講生数</span>
+            <span>会員数</span>
             <div class="stat-icon" style="background:#e0ebff;color:#2563eb">👩‍🎓</div>
           </div>
-          <div class="stat-value">1,284</div>
-          <div class="stat-delta delta-up">▲ 8.4% 先月比</div>
+          <div class="stat-value" id="stat-members"></div>
+          <div class="stat-delta" id="stat-members-delta"></div>
         </div>
         <div class="card">
           <div class="stat-head">
             <span>開講中コース</span>
             <div class="stat-icon" style="background:#d1fae5;color:#047857">📚</div>
           </div>
-          <div class="stat-value">42</div>
-          <div class="stat-delta delta-up">▲ 3 今月新設</div>
+          <div class="stat-value" id="stat-courses"></div>
+          <div class="stat-delta" id="stat-courses-delta"></div>
         </div>
         <div class="card">
           <div class="stat-head">
             <span>修了率</span>
             <div class="stat-icon" style="background:#fef3c7;color:#b45309">🎯</div>
           </div>
-          <div class="stat-value">87.2%</div>
-          <div class="stat-delta delta-up">▲ 2.1pt 前期比</div>
+          <div class="stat-value" id="stat-completion"></div>
+          <div class="stat-delta" id="stat-completion-delta"></div>
         </div>
         <div class="card">
           <div class="stat-head">
             <span>今月の売上</span>
             <div class="stat-icon" style="background:#fee2e2;color:#b91c1c">💰</div>
           </div>
-          <div class="stat-value">¥18.2M</div>
-          <div class="stat-delta delta-down">▼ 1.3% 前月比</div>
+          <div class="stat-value" id="stat-revenue"></div>
+          <div class="stat-delta" id="stat-revenue-delta"></div>
         </div>
       </section>
 
@@ -622,7 +688,7 @@
       <section class="grid">
         <div class="card">
           <div class="section-head">
-            <div class="section-title">受講生の登録推移（過去12ヶ月）</div>
+            <div class="section-title">会員の登録推移（過去12ヶ月）</div>
             <span class="link">詳細を見る →</span>
           </div>
           <div class="chart-wrap">
@@ -635,36 +701,7 @@
             <div class="section-title">今週の予定</div>
             <span class="link">カレンダー</span>
           </div>
-          <div class="schedule-list">
-            <div class="sched-item">
-              <div class="sched-date"><div class="d">24</div><div class="m">APR</div></div>
-              <div>
-                <div class="sched-title">React 実践ワークショップ</div>
-                <div class="sched-meta">14:00 - 17:00・オンライン・山田講師</div>
-              </div>
-            </div>
-            <div class="sched-item">
-              <div class="sched-date"><div class="d">25</div><div class="m">APR</div></div>
-              <div>
-                <div class="sched-title">AI基礎 特別講義</div>
-                <div class="sched-meta">10:00 - 12:00・渋谷校舎・田中講師</div>
-              </div>
-            </div>
-            <div class="sched-item">
-              <div class="sched-date"><div class="d">27</div><div class="m">APR</div></div>
-              <div>
-                <div class="sched-title">期末プロジェクト発表会</div>
-                <div class="sched-meta">13:00 - 18:00・ハイブリッド</div>
-              </div>
-            </div>
-            <div class="sched-item">
-              <div class="sched-date"><div class="d">29</div><div class="m">APR</div></div>
-              <div>
-                <div class="sched-title">講師ミーティング</div>
-                <div class="sched-meta">18:00 - 19:00・オンライン</div>
-              </div>
-            </div>
-          </div>
+          <div class="schedule-list" id="schedule-list"></div>
         </div>
       </section>
 
@@ -684,16 +721,7 @@
             </div>
           </div>
 
-          <div class="legend">
-            <span class="legend-item">
-              <span class="legend-dot" style="background:#f59e0b"></span>
-              初月無料プラン（N=412）
-            </span>
-            <span class="legend-item">
-              <span class="legend-dot" style="background:#2563eb"></span>
-              初月から有料プラン ¥2,980（N=287）
-            </span>
-          </div>
+          <div class="legend" id="cohort-legend"></div>
 
           <div style="height: 260px;">
             <svg id="cohort-chart" viewBox="0 0 700 260" width="100%" height="100%"></svg>
@@ -712,63 +740,7 @@
             <div class="section-title">人気のコース</div>
             <span class="link">すべて見る</span>
           </div>
-          <div class="course-list">
-            <div class="course">
-              <div class="course-thumb" style="background:#2563eb">JS</div>
-              <div>
-                <div class="course-title">モダンJavaScript マスター</div>
-                <div class="course-meta">全12回・受講生 212名・山田 太郎</div>
-              </div>
-              <div class="progress">
-                <div class="progress-text">進捗 78%</div>
-                <div class="progress-bar"><div class="progress-fill" style="width:78%"></div></div>
-              </div>
-            </div>
-            <div class="course">
-              <div class="course-thumb" style="background:#10b981">AI</div>
-              <div>
-                <div class="course-title">AI・機械学習入門</div>
-                <div class="course-meta">全10回・受講生 185名・田中 花子</div>
-              </div>
-              <div class="progress">
-                <div class="progress-text">進捗 65%</div>
-                <div class="progress-bar"><div class="progress-fill" style="width:65%"></div></div>
-              </div>
-            </div>
-            <div class="course">
-              <div class="course-thumb" style="background:#f59e0b">PY</div>
-              <div>
-                <div class="course-title">Python データ分析 実践</div>
-                <div class="course-meta">全8回・受講生 147名・鈴木 健太</div>
-              </div>
-              <div class="progress">
-                <div class="progress-text">進捗 92%</div>
-                <div class="progress-bar"><div class="progress-fill" style="width:92%"></div></div>
-              </div>
-            </div>
-            <div class="course">
-              <div class="course-thumb" style="background:#8b5cf6">CL</div>
-              <div>
-                <div class="course-title">クラウドインフラ AWS編</div>
-                <div class="course-meta">全6回・受講生 98名・高橋 次郎</div>
-              </div>
-              <div class="progress">
-                <div class="progress-text">進捗 45%</div>
-                <div class="progress-bar"><div class="progress-fill" style="width:45%"></div></div>
-              </div>
-            </div>
-            <div class="course">
-              <div class="course-thumb" style="background:#ef4444">SC</div>
-              <div>
-                <div class="course-title">セキュリティ実務講座</div>
-                <div class="course-meta">全5回・受講生 64名・伊藤 久美子</div>
-              </div>
-              <div class="progress">
-                <div class="progress-text">進捗 30%</div>
-                <div class="progress-bar"><div class="progress-fill" style="width:30%"></div></div>
-              </div>
-            </div>
-          </div>
+          <div class="course-list" id="course-list"></div>
         </div>
 
         <div class="card">
@@ -814,116 +786,87 @@
   </div>
 
   <script>
-    // Today's date
-    const today = new Date();
-    const weekday = ["日", "月", "火", "水", "木", "金", "土"][today.getDay()];
-    document.getElementById("today").textContent =
-      `今日は ${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日（${weekday}）です。今日も頑張りましょう！`;
-
-    // Chart: new enrollments over 12 months
-    const data = [62, 78, 85, 92, 108, 124, 132, 118, 140, 156, 168, 184];
-    const labels = ["5月","6月","7月","8月","9月","10月","11月","12月","1月","2月","3月","4月"];
-
-    const svg = document.getElementById("chart");
-    const W = 600, H = 220, P = 32;
-    const maxV = Math.max(...data) * 1.15;
-    const stepX = (W - P * 2) / (data.length - 1);
-
-    // Grid lines
-    for (let i = 0; i <= 4; i++) {
-      const y = P + ((H - P * 2) / 4) * i;
-      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      line.setAttribute("x1", P);
-      line.setAttribute("x2", W - P);
-      line.setAttribute("y1", y);
-      line.setAttribute("y2", y);
-      line.setAttribute("stroke", "#eef1f7");
-      line.setAttribute("stroke-width", "1");
-      svg.appendChild(line);
-    }
-
-    // Points
-    const pts = data.map((v, i) => {
-      const x = P + stepX * i;
-      const y = P + (H - P * 2) * (1 - v / maxV);
-      return [x, y];
-    });
-
-    // Area under line
-    const area = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    const areaD =
-      `M ${pts[0][0]} ${H - P} ` +
-      pts.map(([x, y]) => `L ${x} ${y}`).join(" ") +
-      ` L ${pts[pts.length - 1][0]} ${H - P} Z`;
-    area.setAttribute("d", areaD);
-    area.setAttribute("fill", "url(#grad)");
-    area.setAttribute("opacity", "0.25");
-    svg.appendChild(area);
-
-    // Gradient def
-    const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-    defs.innerHTML = `
-      <linearGradient id="grad" x1="0" x2="0" y1="0" y2="1">
-        <stop offset="0%" stop-color="#2563eb" />
-        <stop offset="100%" stop-color="#2563eb" stop-opacity="0" />
-      </linearGradient>
-    `;
-    svg.appendChild(defs);
-
-    // Line
-    const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    const lineD = "M " + pts.map(([x, y]) => `${x} ${y}`).join(" L ");
-    line.setAttribute("d", lineD);
-    line.setAttribute("fill", "none");
-    line.setAttribute("stroke", "#2563eb");
-    line.setAttribute("stroke-width", "2.5");
-    line.setAttribute("stroke-linecap", "round");
-    line.setAttribute("stroke-linejoin", "round");
-    svg.appendChild(line);
-
-    // Dots & labels
-    pts.forEach(([x, y], i) => {
-      const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      c.setAttribute("cx", x);
-      c.setAttribute("cy", y);
-      c.setAttribute("r", 3.5);
-      c.setAttribute("fill", "white");
-      c.setAttribute("stroke", "#2563eb");
-      c.setAttribute("stroke-width", "2");
-      svg.appendChild(c);
-
-      const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      t.setAttribute("x", x);
-      t.setAttribute("y", H - 10);
-      t.setAttribute("text-anchor", "middle");
-      t.setAttribute("font-size", "11");
-      t.setAttribute("fill", "#6b7389");
-      t.textContent = labels[i];
-      svg.appendChild(t);
-    });
-
-    // ---------- Cohort retention / churn analysis ----------
     const SVG_NS = "http://www.w3.org/2000/svg";
-    const cohortLabels = ["1ヶ月後", "2ヶ月後", "3ヶ月後"];
-    // Retention = % still subscribed at the end of month N
-    const cohortData = {
-      retention: {
-        free: [95, 52, 43],  // 初月無料: 2ヶ月目（有料移行）で大幅離脱
-        paid: [88, 78, 71],  // 初月から有料: 安定
-      },
-      churn: {
-        free: [5, 48, 57],
-        paid: [12, 22, 29],
-      },
-    };
-
     const COLORS = {
       free: "#f59e0b",
       freeText: "#92400e",
       paid: "#2563eb",
       paidText: "#1e40af",
     };
+    const monthLabels = ["5月","6月","7月","8月","9月","10月","11月","12月","1月","2月","3月","4月"];
+    const cohortLabels = ["1ヶ月後", "2ヶ月後", "3ヶ月後"];
 
+    // -------- Academy-specific data --------
+    const academies = {
+      tech: {
+        name: "技術アカデミー",
+        heading: "技術アカデミー ダッシュボード",
+        stats: {
+          members: { v: "1,284", d: "▲ 8.4% 先月比", cls: "delta-up" },
+          courses: { v: "42", d: "▲ 3 今月新設", cls: "delta-up" },
+          completion: { v: "87.2%", d: "▲ 2.1pt 前期比", cls: "delta-up" },
+          revenue: { v: "¥18.2M", d: "▼ 1.3% 前月比", cls: "delta-down" },
+        },
+        enrollTrend: [62, 78, 85, 92, 108, 124, 132, 118, 140, 156, 168, 184],
+        cohort: {
+          freeN: 412, paidN: 287,
+          retention: { free: [95, 52, 43], paid: [88, 78, 71] },
+          churn:     { free: [5, 48, 57],  paid: [12, 22, 29] },
+          note: {
+            retention: "💡 <strong>インサイト：</strong>初月無料コホートは2ヶ月後（有料移行時）に継続率が95%→52%へ大幅に低下。一方、初月から有料プランは88%→78%と離脱が緩やか。有料移行の障壁を下げる施策（進捗リマインド・割引・チュートリアル強化）が有効と推定されます。",
+            churn: "⚠️ <strong>注意点：</strong>初月無料プランの2ヶ月後退会率は48%と高水準。有料移行前の接点設計（進捗リマインド・1on1メンタリング案内等）で退会の山を低減する余地があります。初月有料コホートは累計退会率29%で、3ヶ月経過時点の定着率は良好です。",
+          },
+        },
+        courses: [
+          { code: "JS", color: "#2563eb", title: "モダンJavaScript マスター",    meta: "全12回・受講生 212名・山田 太郎",    progress: 78 },
+          { code: "AI", color: "#10b981", title: "AI・機械学習入門",              meta: "全10回・受講生 185名・田中 花子",    progress: 65 },
+          { code: "PY", color: "#f59e0b", title: "Python データ分析 実践",        meta: "全8回・受講生 147名・鈴木 健太",     progress: 92 },
+          { code: "CL", color: "#8b5cf6", title: "クラウドインフラ AWS編",        meta: "全6回・受講生 98名・高橋 次郎",      progress: 45 },
+          { code: "SC", color: "#ef4444", title: "セキュリティ実務講座",          meta: "全5回・受講生 64名・伊藤 久美子",    progress: 30 },
+        ],
+        schedule: [
+          { d: "24", m: "APR", title: "React 実践ワークショップ",       meta: "14:00 - 17:00・オンライン・山田講師" },
+          { d: "25", m: "APR", title: "AI基礎 特別講義",                meta: "10:00 - 12:00・渋谷校舎・田中講師" },
+          { d: "27", m: "APR", title: "期末プロジェクト発表会",         meta: "13:00 - 18:00・ハイブリッド" },
+          { d: "29", m: "APR", title: "講師ミーティング",                meta: "18:00 - 19:00・オンライン" },
+        ],
+      },
+      mgmt: {
+        name: "経営アカデミー",
+        heading: "経営アカデミー ダッシュボード",
+        stats: {
+          members: { v: "682", d: "▲ 12.1% 先月比", cls: "delta-up" },
+          courses: { v: "18", d: "▲ 2 今月新設", cls: "delta-up" },
+          completion: { v: "91.4%", d: "▲ 3.4pt 前期比", cls: "delta-up" },
+          revenue: { v: "¥9.8M", d: "▲ 5.2% 前月比", cls: "delta-up" },
+        },
+        enrollTrend: [24, 28, 35, 42, 48, 54, 62, 68, 74, 82, 89, 98],
+        cohort: {
+          freeN: 218, paidN: 164,
+          retention: { free: [92, 68, 58], paid: [91, 84, 78] },
+          churn:     { free: [8, 32, 42],  paid: [9, 16, 22] },
+          note: {
+            retention: "💡 <strong>インサイト：</strong>経営アカデミーは初月無料・有料ともに3ヶ月継続率が高水準で、学習意欲の高い層が中心と推測されます。初月無料→2ヶ月後68%、初月有料→2ヶ月後84%と有料コホートが特に安定。コミュニティ活性化で差をさらに広げられる可能性があります。",
+            churn: "⚠️ <strong>注意点：</strong>初月無料プランの累計退会率は3ヶ月時点で42%。2ヶ月目（有料移行）での離脱が32%と相応にあります。初月有料は3ヶ月時点で22%と低く、早期に課金意思を持つ層の定着が良好です。",
+          },
+        },
+        courses: [
+          { code: "MK", color: "#ec4899", title: "B2B マーケティング戦略",          meta: "全10回・受講生 124名・小林 真理",  progress: 82 },
+          { code: "FN", color: "#14b8a6", title: "財務分析と KPI 設計",             meta: "全8回・受講生 98名・中村 誠",      progress: 74 },
+          { code: "HR", color: "#8b5cf6", title: "組織開発・1on1 マネジメント",     meta: "全6回・受講生 86名・佐々木 由美",  progress: 68 },
+          { code: "ST", color: "#2563eb", title: "事業戦略ワークショップ",          meta: "全5回・受講生 72名・大野 雄介",    progress: 58 },
+          { code: "LD", color: "#f59e0b", title: "リーダーシップ基礎",              meta: "全4回・受講生 54名・吉田 陽子",    progress: 42 },
+        ],
+        schedule: [
+          { d: "24", m: "APR", title: "経営者オンライン座談会",         meta: "20:00 - 21:30・オンライン・小林講師" },
+          { d: "26", m: "APR", title: "財務分析 実践ワーク",            meta: "14:00 - 17:00・オンライン・中村講師" },
+          { d: "28", m: "APR", title: "事業戦略ピッチ大会",              meta: "13:00 - 18:00・ハイブリッド" },
+          { d: "30", m: "APR", title: "メンター全体会",                  meta: "19:00 - 20:00・オンライン" },
+        ],
+      },
+    };
+
+    // -------- Helpers --------
     function makeEl(tag, attrs, text) {
       const el = document.createElementNS(SVG_NS, tag);
       for (const k in attrs) el.setAttribute(k, attrs[k]);
@@ -931,19 +874,140 @@
       return el;
     }
 
-    function renderCohortChart(mode) {
+    const yen = (x) => x.toLocaleString();
+
+    // -------- Greeting --------
+    (function renderGreeting() {
+      const today = new Date();
+      const weekday = ["日", "月", "火", "水", "木", "金", "土"][today.getDay()];
+      document.getElementById("today").textContent =
+        `今日は ${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日（${weekday}）です。今日も頑張りましょう！`;
+    })();
+
+    // -------- Stats --------
+    function renderStats(a) {
+      const s = a.stats;
+      const setStat = (id, obj) => {
+        document.getElementById("stat-" + id).textContent = obj.v;
+        const d = document.getElementById("stat-" + id + "-delta");
+        d.textContent = obj.d;
+        d.className = "stat-delta " + obj.cls;
+      };
+      setStat("members", s.members);
+      setStat("courses", s.courses);
+      setStat("completion", s.completion);
+      setStat("revenue", s.revenue);
+    }
+
+    // -------- Enrollment trend line chart --------
+    function renderEnrollChart(a) {
+      const svg = document.getElementById("chart");
+      svg.innerHTML = "";
+      const data = a.enrollTrend;
+      const W = 600, H = 220, P = 32;
+      const maxV = Math.max(...data) * 1.15;
+      const stepX = (W - P * 2) / (data.length - 1);
+
+      for (let i = 0; i <= 4; i++) {
+        const y = P + ((H - P * 2) / 4) * i;
+        svg.appendChild(makeEl("line", {
+          x1: P, x2: W - P, y1: y, y2: y,
+          stroke: "#eef1f7", "stroke-width": 1,
+        }));
+      }
+
+      const pts = data.map((v, i) => [
+        P + stepX * i,
+        P + (H - P * 2) * (1 - v / maxV),
+      ]);
+
+      const defs = document.createElementNS(SVG_NS, "defs");
+      defs.innerHTML = `<linearGradient id="grad" x1="0" x2="0" y1="0" y2="1">
+        <stop offset="0%" stop-color="#2563eb" />
+        <stop offset="100%" stop-color="#2563eb" stop-opacity="0" />
+      </linearGradient>`;
+      svg.appendChild(defs);
+
+      const areaD =
+        `M ${pts[0][0]} ${H - P} ` +
+        pts.map(([x, y]) => `L ${x} ${y}`).join(" ") +
+        ` L ${pts[pts.length - 1][0]} ${H - P} Z`;
+      svg.appendChild(makeEl("path", { d: areaD, fill: "url(#grad)", opacity: 0.25 }));
+
+      const lineD = "M " + pts.map(([x, y]) => `${x} ${y}`).join(" L ");
+      svg.appendChild(makeEl("path", {
+        d: lineD, fill: "none", stroke: "#2563eb",
+        "stroke-width": 2.5, "stroke-linecap": "round", "stroke-linejoin": "round",
+      }));
+
+      pts.forEach(([x, y], i) => {
+        svg.appendChild(makeEl("circle", {
+          cx: x, cy: y, r: 3.5, fill: "white", stroke: "#2563eb", "stroke-width": 2,
+        }));
+        svg.appendChild(makeEl("text", {
+          x, y: H - 10, "text-anchor": "middle", "font-size": 11, fill: "#6b7389",
+        }, monthLabels[i]));
+      });
+    }
+
+    // -------- Schedule --------
+    function renderSchedule(a) {
+      document.getElementById("schedule-list").innerHTML = a.schedule.map(s => `
+        <div class="sched-item">
+          <div class="sched-date"><div class="d">${s.d}</div><div class="m">${s.m}</div></div>
+          <div>
+            <div class="sched-title">${s.title}</div>
+            <div class="sched-meta">${s.meta}</div>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    // -------- Courses --------
+    function renderCourses(a) {
+      document.getElementById("course-list").innerHTML = a.courses.map(c => `
+        <div class="course">
+          <div class="course-thumb" style="background:${c.color}">${c.code}</div>
+          <div>
+            <div class="course-title">${c.title}</div>
+            <div class="course-meta">${c.meta}</div>
+          </div>
+          <div class="progress">
+            <div class="progress-text">進捗 ${c.progress}%</div>
+            <div class="progress-bar"><div class="progress-fill" style="width:${c.progress}%"></div></div>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    // -------- Cohort --------
+    let cohortMode = "retention";
+
+    function renderCohortLegend(a) {
+      document.getElementById("cohort-legend").innerHTML = `
+        <span class="legend-item">
+          <span class="legend-dot" style="background:${COLORS.free}"></span>
+          初月無料プラン（N=${yen(a.cohort.freeN)}）
+        </span>
+        <span class="legend-item">
+          <span class="legend-dot" style="background:${COLORS.paid}"></span>
+          初月から有料プラン ¥2,980（N=${yen(a.cohort.paidN)}）
+        </span>
+      `;
+    }
+
+    function renderCohortChart(a, mode) {
       const svg = document.getElementById("cohort-chart");
       svg.innerHTML = "";
       const W = 700, H = 260;
       const padL = 44, padR = 20, padT = 24, padB = 36;
       const innerW = W - padL - padR;
       const innerH = H - padT - padB;
-      const data = cohortData[mode];
+      const data = a.cohort[mode];
       const groupW = innerW / cohortLabels.length;
       const barW = 40;
       const gap = 8;
 
-      // Y axis grid + labels (0-100%)
       for (let i = 0; i <= 5; i++) {
         const y = padT + (innerH / 5) * i;
         svg.appendChild(makeEl("line", {
@@ -952,64 +1016,34 @@
         }));
         svg.appendChild(makeEl("text", {
           x: padL - 8, y: y + 4,
-          "text-anchor": "end",
-          "font-size": 10,
-          fill: "#6b7389",
+          "text-anchor": "end", "font-size": 10, fill: "#6b7389",
         }, (100 - i * 20) + "%"));
       }
 
       cohortLabels.forEach((label, i) => {
         const gx = padL + groupW * i + groupW / 2;
-
-        // Free cohort bar (left)
-        const freeV = data.free[i];
-        const freeH = innerH * (freeV / 100);
-        const freeX = gx - barW - gap / 2;
-        const freeY = padT + innerH - freeH;
-        svg.appendChild(makeEl("rect", {
-          x: freeX, y: freeY, width: barW, height: freeH,
-          fill: COLORS.free, rx: 4,
-        }));
-        svg.appendChild(makeEl("text", {
-          x: freeX + barW / 2, y: freeY - 6,
-          "text-anchor": "middle",
-          "font-size": 11,
-          "font-weight": 600,
-          fill: COLORS.freeText,
-        }, freeV + "%"));
-
-        // Paid cohort bar (right)
-        const paidV = data.paid[i];
-        const paidH = innerH * (paidV / 100);
-        const paidX = gx + gap / 2;
-        const paidY = padT + innerH - paidH;
-        svg.appendChild(makeEl("rect", {
-          x: paidX, y: paidY, width: barW, height: paidH,
-          fill: COLORS.paid, rx: 4,
-        }));
-        svg.appendChild(makeEl("text", {
-          x: paidX + barW / 2, y: paidY - 6,
-          "text-anchor": "middle",
-          "font-size": 11,
-          "font-weight": 600,
-          fill: COLORS.paidText,
-        }, paidV + "%"));
-
-        // X-axis label
+        const drawBar = (v, x, fill, txtColor) => {
+          const h = innerH * (v / 100);
+          const y = padT + innerH - h;
+          svg.appendChild(makeEl("rect", { x, y, width: barW, height: h, fill, rx: 4 }));
+          svg.appendChild(makeEl("text", {
+            x: x + barW / 2, y: y - 6,
+            "text-anchor": "middle", "font-size": 11, "font-weight": 600, fill: txtColor,
+          }, v + "%"));
+        };
+        drawBar(data.free[i], gx - barW - gap / 2, COLORS.free, COLORS.freeText);
+        drawBar(data.paid[i], gx + gap / 2,       COLORS.paid, COLORS.paidText);
         svg.appendChild(makeEl("text", {
           x: gx, y: padT + innerH + 22,
-          "text-anchor": "middle",
-          "font-size": 12,
-          fill: "#6b7389",
+          "text-anchor": "middle", "font-size": 12, fill: "#6b7389",
         }, label));
       });
     }
 
-    function renderCohortSummary(mode) {
-      const container = document.getElementById("cohort-summary");
-      const data = cohortData[mode];
+    function renderCohortSummary(a, mode) {
+      const data = a.cohort[mode];
       const label = mode === "retention" ? "継続率" : "退会率";
-      container.innerHTML = cohortLabels.map((lbl, i) => `
+      document.getElementById("cohort-summary").innerHTML = cohortLabels.map((lbl, i) => `
         <div class="cohort-box">
           <div class="cohort-box-title">${lbl}の${label}</div>
           <div class="cohort-rows">
@@ -1030,36 +1064,47 @@
       `).join("");
     }
 
-    function renderCohortNote(mode) {
-      const note = document.getElementById("cohort-note");
-      if (mode === "retention") {
-        note.innerHTML =
-          "💡 <strong>インサイト：</strong>初月無料コホートは2ヶ月後（有料移行時）に継続率が95%→52%へ大幅に低下。" +
-          "一方、初月から有料プランは88%→78%と離脱が緩やか。" +
-          "有料移行の障壁を下げる施策（利用状況に応じた割引・チュートリアル強化）が有効と推定されます。";
-      } else {
-        note.innerHTML =
-          "⚠️ <strong>注意点：</strong>初月無料プランの2ヶ月後退会率は48%と高水準。" +
-          "有料移行前の接点設計（進捗リマインド・1on1メンタリング案内等）で退会の山を低減する余地があります。" +
-          "初月有料コホートは累計退会率29%で、3ヶ月経過時点の定着率は良好です。";
-      }
+    function renderCohortNote(a, mode) {
+      document.getElementById("cohort-note").innerHTML = a.cohort.note[mode];
     }
 
-    function setCohortMode(mode) {
-      renderCohortChart(mode);
-      renderCohortSummary(mode);
-      renderCohortNote(mode);
+    function renderCohort(a) {
+      renderCohortLegend(a);
+      renderCohortChart(a, cohortMode);
+      renderCohortSummary(a, cohortMode);
+      renderCohortNote(a, cohortMode);
     }
 
+    // -------- Orchestrator --------
+    let currentAcademy = "tech";
+
+    function renderAll() {
+      const a = academies[currentAcademy];
+      document.getElementById("page-heading").textContent = a.heading;
+      renderStats(a);
+      renderEnrollChart(a);
+      renderSchedule(a);
+      renderCourses(a);
+      renderCohort(a);
+    }
+
+    // Cohort tab switching
     document.querySelectorAll(".seg-tab").forEach(tab => {
       tab.addEventListener("click", () => {
         document.querySelectorAll(".seg-tab").forEach(t => t.classList.remove("active"));
         tab.classList.add("active");
-        setCohortMode(tab.dataset.mode);
+        cohortMode = tab.dataset.mode;
+        renderCohort(academies[currentAcademy]);
       });
     });
 
-    setCohortMode("retention");
+    // Academy dropdown
+    document.getElementById("academy-select").addEventListener("change", (e) => {
+      currentAcademy = e.target.value;
+      renderAll();
+    });
+
+    renderAll();
   </script>
 </body>
 </html>
