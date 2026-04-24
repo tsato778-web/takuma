@@ -1,13 +1,32 @@
 // Vercel Serverless Function: /api/kpi?academy=tech|mgmt
 //
-// UTAGE の継続課金一覧CSV（個人情報を除外したもの）を data/subscriptions.tsv から
-// 読み込み、コホート別の継続率・退会率を計算して返します。
+// - 技術アカデミー: data/subscriptions.tsv（UTAGE CSV）から計算
+// - 経営アカデミー: Stripe API から継続課金を取得し、金額(¥20,000 or ¥22,000)で抽出
 
 import fs from "node:fs";
 import path from "node:path";
+import Stripe from "stripe";
 
-// 初月無料キャンペーンの開始日（この日以降の申込 = 無料コホート）
-const FREE_CAMPAIGN_START = new Date("2026-04-01T00:00:00+09:00");
+// ---------- キャンペーン期間設定 ----------
+// 技術アカデミー: 2026-04-01 以降の申込はすべて無料コホート
+const TECH_FREE_CAMPAIGN_START = new Date("2026-04-01T00:00:00+09:00");
+
+// 経営アカデミー: 以下の期間に申し込んだ人が無料コホート（それ以外は有料）
+const MGMT_FREE_CAMPAIGNS = [
+  { start: "2025-12-24", end: "2025-12-28" },
+  { start: "2026-02-28", end: "2026-02-28" },
+];
+
+function isMgmtFreeTier(signupAt) {
+  return MGMT_FREE_CAMPAIGNS.some((c) => {
+    const start = new Date(c.start + "T00:00:00+09:00");
+    const end = new Date(c.end + "T23:59:59+09:00");
+    return signupAt >= start && signupAt <= end;
+  });
+}
+
+// 経営アカデミーの抽出対象金額（JPY、unit_amount = 円単位）
+const MGMT_AMOUNTS = new Set([20000, 22000]);
 
 // ---------- パーサー ----------
 function parseDateJst(str) {
@@ -84,8 +103,12 @@ function calcRetention(cohort, monthsAfter, now) {
 }
 
 // ---------- 統計 ----------
-function calcStats(subs, now) {
-  const activeCount = subs.filter((s) => s.active).length;
+// opts.revenuePerActive を指定すると「継続中 × その金額」で売上概算。
+// 未指定なら sub.amount を合計（Stripeで金額が混在するケース用）。
+function calcStats(subs, now, opts = {}) {
+  const { revenuePerActive } = opts;
+  const activeSubs = subs.filter((s) => s.active);
+  const activeCount = activeSubs.length;
 
   const thisMonth = monthStart(now);
   const lastMonth = addMonths(thisMonth, -1);
@@ -98,12 +121,13 @@ function calcStats(subs, now) {
     (s) => s.signupAt >= lastMonth && s.signupAt < thisMonth
   ).length;
 
-  // 先月末時点のアクティブ数 = 先月以前に申込 かつ (現在継続中 OR 解除日 >= 今月開始)
-  const lastMonthEndActive = subs.filter((s) => {
+  // 先月末時点のアクティブ = 先月以前に申込 かつ (現在継続中 OR 解除日 >= 今月開始)
+  const lastMonthEndActiveSubs = subs.filter((s) => {
     if (s.signupAt >= thisMonth) return false;
     if (s.active) return true;
     return s.cancelAt && s.cancelAt >= thisMonth;
-  }).length;
+  });
+  const lastMonthEndActive = lastMonthEndActiveSubs.length;
 
   const memberDeltaPct =
     lastMonthEndActive > 0
@@ -118,9 +142,13 @@ function calcStats(subs, now) {
   // 3ヶ月継続率（全体）
   const ret3m = calcRetention(subs, 3, now);
 
-  // 月次売上概算（継続中 × 2980円）
-  const revenue = activeCount * 2980;
-  const lastRevenue = lastMonthEndActive * 2980;
+  // 月次売上概算
+  const sumAmount = (list) =>
+    revenuePerActive
+      ? list.length * revenuePerActive
+      : list.reduce((sum, s) => sum + (s.amount || 0), 0);
+  const revenue = sumAmount(activeSubs);
+  const lastRevenue = sumAmount(lastMonthEndActiveSubs);
   const revenueDeltaPct =
     lastRevenue > 0
       ? Math.round(((revenue - lastRevenue) / lastRevenue) * 1000) / 10
@@ -169,10 +197,10 @@ function calcMonthlySignups(subs, now) {
 // ---------- ペイロード生成 ----------
 function buildTechPayload(now) {
   const subs = loadSubscriptions();
-  const free = subs.filter((s) => s.signupAt >= FREE_CAMPAIGN_START);
-  const paid = subs.filter((s) => s.signupAt < FREE_CAMPAIGN_START);
+  const free = subs.filter((s) => s.signupAt >= TECH_FREE_CAMPAIGN_START);
+  const paid = subs.filter((s) => s.signupAt < TECH_FREE_CAMPAIGN_START);
 
-  const stats = calcStats(subs, now);
+  const stats = calcStats(subs, now, { revenuePerActive: 2980 });
   const enrollTrend = calcMonthlySignups(subs, now);
 
   const retFree = [1, 2, 3].map((m) => calcRetention(free, m, now).value);
@@ -238,15 +266,157 @@ function buildTechPayload(now) {
   };
 }
 
-function buildMgmtPayload() {
+// ---------- Stripe 連携（経営アカデミー） ----------
+let stripeCacheData = null;
+let stripeCacheAt = 0;
+const STRIPE_CACHE_MS = 60 * 1000; // 60秒
+
+async function fetchMgmtSubsFromStripe() {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) return null;
+
+  // サーバーレス関数間で短時間キャッシュ（同一インスタンス内のみ有効）
+  if (stripeCacheData && Date.now() - stripeCacheAt < STRIPE_CACHE_MS) {
+    return stripeCacheData;
+  }
+
+  const stripe = new Stripe(key, { apiVersion: "2024-12-18.acacia" });
+  const subs = [];
+
+  for await (const sub of stripe.subscriptions.list({
+    status: "all",
+    limit: 100,
+    expand: ["data.items.data.price"],
+  })) {
+    const price = sub.items?.data?.[0]?.price;
+    if (!price) continue;
+    if (price.currency !== "jpy") continue;
+    if (!MGMT_AMOUNTS.has(price.unit_amount)) continue;
+
+    const signupAt = new Date(sub.created * 1000);
+    const cancelAt = sub.canceled_at ? new Date(sub.canceled_at * 1000) : null;
+    // active/trialing = 継続中、canceled = 解約、それ以外(incomplete等) は一旦 inactive 扱い
+    const active = ["active", "trialing", "past_due"].includes(sub.status);
+
+    subs.push({
+      signupAt,
+      cancelAt,
+      active,
+      amount: price.unit_amount,
+      status: sub.status,
+    });
+  }
+
+  stripeCacheData = subs;
+  stripeCacheAt = Date.now();
+  return subs;
+}
+
+async function buildMgmtPayload(now) {
+  let subs;
+  try {
+    subs = await fetchMgmtSubsFromStripe();
+  } catch (err) {
+    console.error("Stripe fetch error:", err);
+    return buildMgmtPlaceholder(`Stripe 接続エラー: ${err.message}`);
+  }
+
+  if (subs === null) {
+    return buildMgmtPlaceholder("STRIPE_SECRET_KEY が未設定です");
+  }
+
+  if (subs.length === 0) {
+    return buildMgmtPlaceholder(
+      "Stripe から ¥20,000 / ¥22,000 の継続課金が見つかりませんでした（対象金額の決済が無いか、キーの権限不足の可能性あり）"
+    );
+  }
+
+  const free = subs.filter((s) => isMgmtFreeTier(s.signupAt));
+  const paid = subs.filter((s) => !isMgmtFreeTier(s.signupAt));
+
+  const stats = calcStats(subs, now); // 金額は sub.amount を合計
+
+  // 過去12ヶ月の新規申込トレンド
+  const enrollTrend = [];
+  for (let i = 11; i >= 0; i--) {
+    const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+    enrollTrend.push(
+      subs.filter((s) => s.signupAt >= start && s.signupAt < end).length
+    );
+  }
+
+  const retFree = [1, 2, 3].map((m) => calcRetention(free, m, now).value);
+  const retPaid = [1, 2, 3].map((m) => calcRetention(paid, m, now).value);
+  const chFree = retFree.map((v) => (v !== null ? Math.round((100 - v) * 10) / 10 : null));
+  const chPaid = retPaid.map((v) => (v !== null ? Math.round((100 - v) * 10) / 10 : null));
+
+  const freeActive = free.filter((s) => s.active).length;
+  const paidActive = paid.filter((s) => s.active).length;
+
+  return {
+    name: "経営アカデミー",
+    heading: "経営アカデミー ダッシュボード",
+    stats: {
+      members: stats.members,
+      courses: stats.newSignups,
+      completion: stats.retention3m,
+      revenue: stats.revenue,
+    },
+    enrollTrend,
+    cohort: {
+      freeN: free.length,
+      paidN: paid.length,
+      retention: { free: retFree, paid: retPaid },
+      churn: { free: chFree, paid: chPaid },
+      note: {
+        retention:
+          "💡 <strong>インサイト：</strong>Stripe から取得した継続課金を金額（¥20,000 または ¥22,000）で抽出しています。初月無料キャンペーン（2025-12-24〜28、2026-02-28）期間中の申込を「無料コホート」に分類。価格改定（¥20,000→¥22,000）前後の会員も同一プランとして合算しています。",
+        churn:
+          "⚠️ <strong>注意点：</strong>Stripe の subscription.canceled_at を退会日として計算。active/trialing/past_due を継続中として扱っています。",
+      },
+    },
+    courses: [
+      {
+        code: "KA",
+        color: "#8b5cf6",
+        title: "経営アカデミー（月額 ¥22,000）",
+        meta: `累計契約 ${subs.length}件・継続中 ${subs.filter((s) => s.active).length}名`,
+        progress: Math.round(
+          (subs.filter((s) => s.active).length / Math.max(subs.length, 1)) * 100
+        ),
+      },
+      {
+        code: "無",
+        color: "#f59e0b",
+        title: "初月無料コホート",
+        meta: `登録 ${free.length}名・継続中 ${freeActive}名（キャンペーン期間内申込）`,
+        progress: free.length > 0 ? Math.round((freeActive / free.length) * 100) : 0,
+      },
+      {
+        code: "有",
+        color: "#2563eb",
+        title: "初月有料コホート",
+        meta: `登録 ${paid.length}名・継続中 ${paidActive}名（通常申込）`,
+        progress: paid.length > 0 ? Math.round((paidActive / paid.length) * 100) : 0,
+      },
+    ],
+    schedule: [
+      { d: "25", m: "APR", title: "経営者オンライン座談会", meta: "20:00 - 21:30・オンライン" },
+      { d: "28", m: "APR", title: "戦略レビュー会", meta: "19:00 - 20:30・オンライン" },
+    ],
+  };
+}
+
+function buildMgmtPlaceholder(reason) {
   return {
     name: "経営アカデミー",
     heading: "経営アカデミー ダッシュボード（準備中）",
     stats: {
-      members:    { v: "—", d: "UTAGE未連携",   cls: "delta-up" },
-      courses:    { v: "—", d: "—",              cls: "delta-up" },
-      completion: { v: "—", d: "—",              cls: "delta-up" },
-      revenue:    { v: "—", d: "—",              cls: "delta-up" },
+      members:    { v: "—", d: reason, cls: "delta-up" },
+      courses:    { v: "—", d: "—",    cls: "delta-up" },
+      completion: { v: "—", d: "—",    cls: "delta-up" },
+      revenue:    { v: "—", d: "—",    cls: "delta-up" },
     },
     enrollTrend: new Array(12).fill(0),
     cohort: {
@@ -255,15 +425,14 @@ function buildMgmtPayload() {
       retention: { free: [null, null, null], paid: [null, null, null] },
       churn:     { free: [null, null, null], paid: [null, null, null] },
       note: {
-        retention:
-          "⚙️ 経営アカデミーは現時点で UTAGE 連携されていません。データソースが用意され次第、技術アカデミーと同じ集計が表示されます。",
-        churn:
-          "⚙️ 経営アカデミーは現時点で UTAGE 連携されていません。",
+        retention: `⚙️ ${reason}`,
+        churn: `⚙️ ${reason}`,
       },
     },
     courses: [],
     schedule: [],
     notReady: true,
+    _reason: reason,
   };
 }
 
@@ -273,15 +442,23 @@ export default async function handler(req, res) {
 
   try {
     let payload;
-    if (academy === "tech") payload = buildTechPayload(now);
-    else if (academy === "mgmt") payload = buildMgmtPayload();
-    else return res.status(404).json({ error: "unknown academy", academy });
+    let sourceLabel;
+    if (academy === "tech") {
+      payload = buildTechPayload(now);
+      sourceLabel = "csv";
+    } else if (academy === "mgmt") {
+      payload = await buildMgmtPayload(now);
+      sourceLabel = payload.notReady ? "placeholder" : "stripe";
+    } else {
+      return res.status(404).json({ error: "unknown academy", academy });
+    }
 
     res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
     return res.status(200).json({
       ...payload,
-      _source: academy === "tech" ? "csv" : "placeholder",
-      _hasApiKey: Boolean(process.env.UTAGE_API_KEY),
+      _source: sourceLabel,
+      _hasUtageKey: Boolean(process.env.UTAGE_API_KEY),
+      _hasStripeKey: Boolean(process.env.STRIPE_SECRET_KEY),
       _generatedAt: now.toISOString(),
     });
   } catch (err) {
