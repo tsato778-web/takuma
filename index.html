@@ -684,6 +684,7 @@
           </div>
           <h1 id="page-heading">技術アカデミー ダッシュボード</h1>
           <p id="today"></p>
+          <p id="data-source" style="font-size:11px;color:#94a3b8;margin:4px 0 0"></p>
         </div>
         <div class="topbar-actions">
           <div class="search">
@@ -700,7 +701,7 @@
       <section class="stats">
         <div class="card">
           <div class="stat-head">
-            <span>会員数</span>
+            <span>会員数（継続中）</span>
             <div class="stat-icon" style="background:#e0ebff;color:#2563eb">👩‍🎓</div>
           </div>
           <div class="stat-value" id="stat-members"></div>
@@ -708,15 +709,15 @@
         </div>
         <div class="card">
           <div class="stat-head">
-            <span>開講中コース</span>
-            <div class="stat-icon" style="background:#d1fae5;color:#047857">📚</div>
+            <span>今月の新規入会</span>
+            <div class="stat-icon" style="background:#d1fae5;color:#047857">✨</div>
           </div>
           <div class="stat-value" id="stat-courses"></div>
           <div class="stat-delta" id="stat-courses-delta"></div>
         </div>
         <div class="card">
           <div class="stat-head">
-            <span>修了率</span>
+            <span>3ヶ月継続率</span>
             <div class="stat-icon" style="background:#fef3c7;color:#b45309">🎯</div>
           </div>
           <div class="stat-value" id="stat-completion"></div>
@@ -724,7 +725,7 @@
         </div>
         <div class="card">
           <div class="stat-head">
-            <span>今月の売上</span>
+            <span>今月の売上（概算）</span>
             <div class="stat-icon" style="background:#fee2e2;color:#b91c1c">💰</div>
           </div>
           <div class="stat-value" id="stat-revenue"></div>
@@ -1014,6 +1015,18 @@
       cohortLabels.forEach((label, i) => {
         const gx = padL + groupW * i + groupW / 2;
         const drawBar = (v, x, fill, txtColor) => {
+          if (v === null || v === undefined) {
+            // 計測中: 薄いプレースホルダ + "—" 表示
+            svg.appendChild(makeEl("rect", {
+              x, y: padT + innerH - 6, width: barW, height: 6,
+              fill: "#e6eaf2", rx: 3,
+            }));
+            svg.appendChild(makeEl("text", {
+              x: x + barW / 2, y: padT + innerH - 14,
+              "text-anchor": "middle", "font-size": 10, "font-weight": 600, fill: "#94a3b8",
+            }, "計測中"));
+            return;
+          }
           const h = innerH * (v / 100);
           const y = padT + innerH - h;
           svg.appendChild(makeEl("rect", { x, y, width: barW, height: h, fill, rx: 4 }));
@@ -1034,6 +1047,8 @@
     function renderCohortSummary(a, mode) {
       const data = a.cohort[mode];
       const label = mode === "retention" ? "継続率" : "退会率";
+      const fmt = (v) => (v === null || v === undefined ? "計測中" : `${v}%`);
+      const mutedStyle = (v) => (v === null || v === undefined ? "color:#94a3b8;font-size:12px" : "");
       document.getElementById("cohort-summary").innerHTML = cohortLabels.map((lbl, i) => `
         <div class="cohort-box">
           <div class="cohort-box-title">${lbl}の${label}</div>
@@ -1042,13 +1057,13 @@
               <span class="seg-name">
                 <span class="legend-dot" style="background:${COLORS.free}"></span>初月無料
               </span>
-              <span class="seg-val" style="color:${COLORS.freeText}">${data.free[i]}%</span>
+              <span class="seg-val" style="color:${COLORS.freeText};${mutedStyle(data.free[i])}">${fmt(data.free[i])}</span>
             </div>
             <div class="cohort-row">
               <span class="seg-name">
                 <span class="legend-dot" style="background:${COLORS.paid}"></span>初月有料
               </span>
-              <span class="seg-val" style="color:${COLORS.paidText}">${data.paid[i]}%</span>
+              <span class="seg-val" style="color:${COLORS.paidText};${mutedStyle(data.paid[i])}">${fmt(data.paid[i])}</span>
             </div>
           </div>
         </div>
@@ -1080,6 +1095,10 @@
         const a = await loadAcademy(currentAcademy);
         currentData = a;
         document.getElementById("page-heading").textContent = a.heading;
+        const src = a._source === "csv"
+          ? `データソース: UTAGE継続課金CSV（最終更新 ${new Date(a._generatedAt).toLocaleString("ja-JP")}）`
+          : `データソース: ${a._source || "未設定"}`;
+        document.getElementById("data-source").textContent = src;
         renderStats(a);
         renderEnrollChart(a);
         renderSchedule(a);
