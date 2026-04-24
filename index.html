@@ -1095,10 +1095,14 @@
         const a = await loadAcademy(currentAcademy);
         currentData = a;
         document.getElementById("page-heading").textContent = a.heading;
-        const src = a._source === "csv"
-          ? `データソース: UTAGE継続課金CSV（最終更新 ${new Date(a._generatedAt).toLocaleString("ja-JP")}）`
-          : `データソース: ${a._source || "未設定"}`;
-        document.getElementById("data-source").textContent = src;
+        const gen = a._generatedAt ? new Date(a._generatedAt).toLocaleString("ja-JP") : "";
+        const srcMap = {
+          csv: `UTAGE継続課金CSV（最終更新 ${gen}）`,
+          stripe: `Stripe API（リアルタイム取得 ${gen}）`,
+          placeholder: a._reason ? `準備中 — ${a._reason}` : "準備中",
+        };
+        document.getElementById("data-source").textContent =
+          `データソース: ${srcMap[a._source] || a._source || "未設定"}`;
         renderStats(a);
         renderEnrollChart(a);
         renderSchedule(a);
