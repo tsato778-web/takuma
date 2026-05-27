@@ -23,7 +23,7 @@ const NAV = [
   { label: "会計", href: "/pos", icon: Receipt, enabled: true },
   { label: "回数券", href: "/tickets", icon: Ticket, enabled: false },
   { label: "LINE", href: "/line", icon: MessageCircle, enabled: false },
-  { label: "KPI分析", href: "/analytics", icon: BarChart3, enabled: false },
+  { label: "KPI分析", href: "/analytics", icon: BarChart3, enabled: true },
   { label: "設定", href: "/settings", icon: Settings, enabled: false },
 ];
 
