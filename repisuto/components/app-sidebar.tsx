@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -10,29 +11,86 @@ import {
   Ticket,
   MessageCircle,
   BarChart3,
-  Settings,
+  Link2,
+  Database,
+  UserCog,
+  Plug,
+  Wrench,
   Sparkles,
+  ChevronDown,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-const NAV = [
-  { label: "予約台帳", href: "/reservations", icon: CalendarDays, enabled: true },
-  { label: "顧客", href: "/customers", icon: Users, enabled: true },
-  { label: "カルテ", href: "/records", icon: FileText, enabled: true },
-  { label: "会計", href: "/pos", icon: Receipt, enabled: true },
-  { label: "回数券", href: "/tickets", icon: Ticket, enabled: false },
-  { label: "LINE", href: "/line", icon: MessageCircle, enabled: false },
-  { label: "KPI分析", href: "/analytics", icon: BarChart3, enabled: true },
-  { label: "設定", href: "/settings", icon: Settings, enabled: false },
+type Leaf = { label: string; href: string };
+type NavItem = { label: string; icon: typeof CalendarDays; href?: string; children?: Leaf[] };
+
+const NAV: NavItem[] = [
+  { label: "予約台帳", icon: CalendarDays, href: "/reservations" },
+  { label: "顧客", icon: Users, href: "/customers" },
+  { label: "カルテ", icon: FileText, href: "/records" },
+  { label: "会計", icon: Receipt, href: "/pos" },
+  { label: "回数券", icon: Ticket, href: "/tickets" },
+  {
+    label: "LINE",
+    icon: MessageCircle,
+    children: [
+      { label: "セグメント配信", href: "/line/segments" },
+      { label: "シナリオ配信", href: "/line/scenarios" },
+      { label: "一斉配信", href: "/line/broadcast" },
+      { label: "テンプレート", href: "/line/templates" },
+      { label: "自動応答", href: "/line/auto-reply" },
+    ],
+  },
+  { label: "KPI分析", icon: BarChart3, href: "/analytics" },
+  {
+    label: "強制リンク作成",
+    icon: Link2,
+    children: [
+      { label: "リンク作成", href: "/links" },
+      { label: "個人情報入力テンプレート", href: "/links/personal-info" },
+      { label: "確認画面テンプレート", href: "/links/confirm" },
+      { label: "サンクスページテンプレート", href: "/links/thanks" },
+      { label: "リマインドテンプレート", href: "/links/reminder" },
+      { label: "タグテンプレート", href: "/links/tags" },
+    ],
+  },
+  {
+    label: "基本マスター",
+    icon: Database,
+    children: [
+      { label: "ブランドマスター", href: "/master/brands" },
+      { label: "店舗マスター", href: "/master/stores" },
+      { label: "顧客タグマスター", href: "/master/customer-tags" },
+      { label: "メニューカテゴリー", href: "/master/menu-categories" },
+      { label: "メニューマスター", href: "/master/menus" },
+      { label: "売上カテゴリー", href: "/master/sales-categories" },
+      { label: "売上メニュー", href: "/master/sales-menus" },
+      { label: "決済種別マスター", href: "/master/payment-types" },
+      { label: "口コミ種別マスター", href: "/master/review-types" },
+      { label: "キャンセル理由マスター", href: "/master/cancel-reasons" },
+    ],
+  },
+  {
+    label: "スタッフ登録",
+    icon: UserCog,
+    children: [
+      { label: "スタッフマスター", href: "/staff" },
+      { label: "出勤表", href: "/staff/shifts" },
+      { label: "予約開放設定", href: "/staff/reservation-opening" },
+    ],
+  },
+  { label: "外部連携", icon: Plug, href: "/integrations" },
+  { label: "メンテナンス", icon: Wrench, href: "/maintenance" },
 ];
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
   return (
-    <aside className="flex w-[220px] shrink-0 flex-col border-r border-border bg-card">
-      <div className="flex h-16 items-center gap-2 px-5">
+    <aside className="flex w-[230px] shrink-0 flex-col border-r border-border bg-card">
+      <div className="flex h-16 shrink-0 items-center gap-2 px-5">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent text-primary-foreground">
           <Sparkles className="h-4 w-4" />
         </div>
@@ -42,47 +100,13 @@ export function AppSidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 space-y-1 px-3 py-3">
-        {NAV.map((item) => {
-          const active = pathname.startsWith(item.href);
-          const Icon = item.icon;
-          const base =
-            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors";
-          if (!item.enabled) {
-            return (
-              <span
-                key={item.href}
-                className={cn(base, "cursor-not-allowed text-muted-foreground/50")}
-                title="準備中"
-              >
-                <Icon className="h-4 w-4" />
-                {item.label}
-              </span>
-            );
-          }
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                base,
-                active
-                  ? "bg-primary/10 text-primary"
-                  : "text-foreground/70 hover:bg-secondary hover:text-foreground"
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              {item.label}
-            </Link>
-          );
-        })}
+      <nav className="thin-scrollbar flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
+        {NAV.map((item) => (item.children ? <Group key={item.label} item={item} isActive={isActive} /> : <TopLink key={item.label} item={item} active={isActive(item.href!)} />))}
       </nav>
 
-      <div className="border-t border-border px-5 py-4">
+      <div className="shrink-0 border-t border-border px-5 py-4">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">
-            店長
-          </div>
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">店長</div>
           <div className="leading-tight">
             <div className="text-xs font-medium">佐々木 マネージャー</div>
             <div className="text-[10px] text-muted-foreground">MANAGER</div>
@@ -90,5 +114,65 @@ export function AppSidebar() {
         </div>
       </div>
     </aside>
+  );
+}
+
+function TopLink({ item, active }: { item: NavItem; active: boolean }) {
+  const Icon = item.icon;
+  return (
+    <Link
+      href={item.href!}
+      className={cn(
+        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+        active ? "bg-primary/10 text-primary" : "text-foreground/70 hover:bg-secondary hover:text-foreground"
+      )}
+    >
+      <Icon className="h-4 w-4" />
+      {item.label}
+    </Link>
+  );
+}
+
+function Group({ item, isActive }: { item: NavItem; isActive: (href: string) => boolean }) {
+  const Icon = item.icon;
+  const hasActive = item.children!.some((c) => isActive(c.href));
+  const [open, setOpen] = React.useState(hasActive);
+  React.useEffect(() => {
+    if (hasActive) setOpen(true);
+  }, [hasActive]);
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+          hasActive ? "text-primary" : "text-foreground/70 hover:bg-secondary hover:text-foreground"
+        )}
+      >
+        <Icon className="h-4 w-4" />
+        {item.label}
+        <ChevronDown className={cn("ml-auto h-4 w-4 transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="mb-1 ml-4 space-y-0.5 border-l border-border pl-3">
+          {item.children!.map((c) => {
+            const active = isActive(c.href);
+            return (
+              <Link
+                key={c.href}
+                href={c.href}
+                className={cn(
+                  "block rounded-md px-2.5 py-1.5 text-[13px] transition-colors",
+                  active ? "bg-primary/10 font-medium text-primary" : "text-foreground/65 hover:bg-secondary hover:text-foreground"
+                )}
+              >
+                {c.label}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
