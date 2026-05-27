@@ -2,6 +2,8 @@
 // 個人情報入力テンプレート・回答フォーム(問診/アンケート)で共通利用する。
 
 export type FieldType =
+  | "subheading"
+  | "heading"
   | "text"
   | "textarea"
   | "select"
@@ -9,10 +11,14 @@ export type FieldType =
   | "checkbox"
   | "date"
   | "number"
+  | "prefecture"
+  | "file"
   | "image"
   | "consent";
 
 export const FIELD_TYPE_LABEL: Record<FieldType, string> = {
+  subheading: "小見出し",
+  heading: "中見出し（セクション）",
   text: "テキスト",
   textarea: "長文",
   select: "プルダウン",
@@ -20,9 +26,14 @@ export const FIELD_TYPE_LABEL: Record<FieldType, string> = {
   checkbox: "チェックボックス",
   date: "日付",
   number: "数値",
+  prefecture: "都道府県",
+  file: "ファイル添付",
   image: "画像アップロード",
   consent: "同意チェック",
 };
+
+// 見出し系は入力欄を持たない（セクション区切り）
+export const isHeading = (t: FieldType) => t === "heading" || t === "subheading";
 
 export interface FormField {
   id: string;
@@ -90,17 +101,25 @@ export const BASE_INTAKE: FormTemplate[] = [
 export interface SurveyForm {
   id: string;
   name: string;
-  purpose: "初回問診" | "定期アンケート" | "来店後アンケート";
+  purpose: string;
+  folder: string;
   fields: number;
   responses: number;
   status: "公開中" | "下書き";
   linkedToLine: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
+export const FORM_FOLDERS = ["すべて", "初回問診", "アンケート", "同意書", "キャンペーン", "未分類"];
+
 export const FORMS: SurveyForm[] = [
-  { id: "form_intake", name: "初回カウンセリングフォーム", purpose: "初回問診", fields: 8, responses: 142, status: "公開中", linkedToLine: true },
-  { id: "form_after", name: "来店後アンケート（翌日配信）", purpose: "来店後アンケート", fields: 5, responses: 86, status: "公開中", linkedToLine: true },
-  { id: "form_survey", name: "定期満足度アンケート", purpose: "定期アンケート", fields: 6, responses: 39, status: "下書き", linkedToLine: false },
+  { id: "form_intake", name: "初回カウンセリングフォーム", purpose: "初回問診", folder: "初回問診", fields: 8, responses: 142, status: "公開中", linkedToLine: true, createdAt: "2026/03/02", updatedAt: "2026/05/20" },
+  { id: "form_consent", name: "施術同意書（敏感肌・既往歴）", purpose: "同意書", folder: "同意書", fields: 4, responses: 118, status: "公開中", linkedToLine: false, createdAt: "2026/03/02", updatedAt: "2026/04/11" },
+  { id: "form_after", name: "来店後アンケート（翌日配信）", purpose: "来店後アンケート", folder: "アンケート", fields: 5, responses: 86, status: "公開中", linkedToLine: true, createdAt: "2026/03/15", updatedAt: "2026/05/18" },
+  { id: "form_review", name: "口コミ依頼前アンケート", purpose: "来店後アンケート", folder: "アンケート", fields: 3, responses: 54, status: "公開中", linkedToLine: true, createdAt: "2026/04/01", updatedAt: "2026/05/10" },
+  { id: "form_survey", name: "定期満足度アンケート", purpose: "定期アンケート", folder: "アンケート", fields: 6, responses: 39, status: "下書き", linkedToLine: false, createdAt: "2026/04/20", updatedAt: "2026/05/02" },
+  { id: "form_campaign", name: "春の紹介キャンペーン応募", purpose: "キャンペーン", folder: "キャンペーン", fields: 5, responses: 73, status: "公開中", linkedToLine: true, createdAt: "2026/03/28", updatedAt: "2026/04/30" },
 ];
 
 export const AFTER_SURVEY: FormField[] = [

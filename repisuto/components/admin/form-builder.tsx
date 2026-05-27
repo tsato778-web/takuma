@@ -1,13 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { Plus, Trash2, ChevronUp, ChevronDown, GripVertical } from "lucide-react";
+import { Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Copy } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { FIELD_TYPE_LABEL, type FieldType, type FormField, type FormTemplate } from "@/lib/forms";
+import { FIELD_TYPE_LABEL, isHeading, type FieldType, type FormField, type FormTemplate } from "@/lib/forms";
 
 const TYPES = Object.keys(FIELD_TYPE_LABEL) as FieldType[];
 const needsOptions = (t: FieldType) => t === "select" || t === "radio" || t === "checkbox";
+const PREFS = ["北海道", "東京都", "大阪府", "福岡県", "…"];
 
 export function FormBuilder({
   initialFields = [],
@@ -21,13 +22,21 @@ export function FormBuilder({
 
   function add() {
     const id = `f${Date.now()}`;
-    setFields((fs) => [...fs, { id, label: "新しい項目", type: newType, required: false, options: needsOptions(newType) ? ["選択肢1", "選択肢2"] : undefined }]);
+    const label = isHeading(newType) ? "セクション見出し" : "新しい項目";
+    setFields((fs) => [...fs, { id, label, type: newType, required: false, options: needsOptions(newType) ? ["選択肢1", "選択肢2"] : undefined }]);
   }
   function update(id: string, patch: Partial<FormField>) {
     setFields((fs) => fs.map((f) => (f.id === id ? { ...f, ...patch } : f)));
   }
   function remove(id: string) {
     setFields((fs) => fs.filter((f) => f.id !== id));
+  }
+  function duplicate(i: number) {
+    setFields((fs) => {
+      const src = fs[i];
+      const copy = { ...src, id: `f${Date.now()}`, options: src.options ? [...src.options] : undefined };
+      return [...fs.slice(0, i + 1), copy, ...fs.slice(i + 1)];
+    });
   }
   function move(i: number, dir: -1 | 1) {
     setFields((fs) => {
@@ -67,16 +76,19 @@ export function FormBuilder({
                 </select>
                 <button onClick={() => move(i, -1)} className="text-muted-foreground hover:text-foreground"><ChevronUp className="h-4 w-4" /></button>
                 <button onClick={() => move(i, 1)} className="text-muted-foreground hover:text-foreground"><ChevronDown className="h-4 w-4" /></button>
+                <button onClick={() => duplicate(i)} title="複製" className="text-muted-foreground hover:text-foreground"><Copy className="h-4 w-4" /></button>
                 <button onClick={() => remove(f.id)} className="text-muted-foreground hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
               </div>
               {needsOptions(f.type) && (
                 <input value={(f.options ?? []).join(", ")} onChange={(e) => update(f.id, { options: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} placeholder="選択肢をカンマ区切りで" className="mt-2 w-full rounded-md border border-input bg-card px-2 py-1 text-xs" />
               )}
-              <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-                <label className="flex items-center gap-1"><input type="checkbox" checked={f.required} onChange={(e) => update(f.id, { required: e.target.checked })} className="h-3.5 w-3.5 accent-primary" />必須</label>
-                <label className="flex items-center gap-1"><input type="checkbox" checked={!!f.tagOnAnswer} onChange={(e) => update(f.id, { tagOnAnswer: e.target.checked })} className="h-3.5 w-3.5 accent-accent" />回答をタグ化</label>
-                {f.mapTo && <span className="rounded bg-secondary px-1.5 py-0.5">顧客項目: {f.mapTo}</span>}
-              </div>
+              {!isHeading(f.type) && (
+                <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+                  <label className="flex items-center gap-1"><input type="checkbox" checked={f.required} onChange={(e) => update(f.id, { required: e.target.checked })} className="h-3.5 w-3.5 accent-primary" />必須</label>
+                  <label className="flex items-center gap-1"><input type="checkbox" checked={!!f.tagOnAnswer} onChange={(e) => update(f.id, { tagOnAnswer: e.target.checked })} className="h-3.5 w-3.5 accent-accent" />回答をタグ化</label>
+                  {f.mapTo && <span className="rounded bg-secondary px-1.5 py-0.5">顧客項目: {f.mapTo}</span>}
+                </div>
+              )}
             </div>
           ))}
           {fields.length === 0 && <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">項目を追加してください</div>}
@@ -95,16 +107,22 @@ export function FormBuilder({
         <div className="rounded-xl border border-border bg-card p-4">
           <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">プレビュー（お客様入力画面）</div>
           <div className="space-y-3">
-            {fields.map((f) => (
-              <div key={f.id}>
-                <label className="mb-1 block text-xs font-medium">
-                  {f.label}
-                  {f.required && <span className="ml-1 text-rose-500">*</span>}
-                </label>
-                <FieldPreview field={f} />
-              </div>
-            ))}
-            <button className="w-full rounded-md bg-primary py-2 text-sm font-semibold text-primary-foreground">予約へ進む</button>
+            {fields.map((f) =>
+              f.type === "heading" ? (
+                <div key={f.id} className="border-b border-border pb-1 pt-1 text-sm font-bold text-foreground">{f.label}</div>
+              ) : f.type === "subheading" ? (
+                <div key={f.id} className="text-xs font-semibold text-muted-foreground">{f.label}</div>
+              ) : (
+                <div key={f.id}>
+                  <label className="mb-1 block text-xs font-medium">
+                    {f.label}
+                    {f.required && <span className="ml-1 text-rose-500">*</span>}
+                  </label>
+                  <FieldPreview field={f} />
+                </div>
+              )
+            )}
+            <button className="w-full rounded-md bg-primary py-2 text-sm font-semibold text-primary-foreground">送信する</button>
           </div>
         </div>
       </div>
@@ -134,6 +152,10 @@ function FieldPreview({ field: f }: { field: FormField }) {
       return <div className={base}>YYYY / MM / DD</div>;
     case "number":
       return <div className={base}>0</div>;
+    case "prefecture":
+      return <div className={cn(base, "flex items-center justify-between")}>{PREFS[0]}<ChevronDown className="h-3.5 w-3.5" /></div>;
+    case "file":
+      return <div className={cn(base, "flex h-12 items-center justify-center border-dashed")}>＋ ファイルを添付</div>;
     case "image":
       return <div className={cn(base, "flex h-16 items-center justify-center border-dashed")}>＋ 画像をアップロード</div>;
     case "consent":

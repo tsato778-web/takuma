@@ -94,8 +94,8 @@ export const LINE_KIND_LABEL: Record<LineKind, string> = {
   referral: "紹介特典",
 };
 
-export type PaymentMethod = "現金" | "クレジット" | "PayPay" | "QR" | "ホットペッパーポイント" | "その他";
-export const PAYMENT_METHODS: PaymentMethod[] = ["現金", "クレジット", "PayPay", "QR", "ホットペッパーポイント", "その他"];
+export type PaymentMethod = "クレジット" | "現金" | "PayPay" | "QR" | "ホットペッパーポイント" | "その他";
+export const PAYMENT_METHODS: PaymentMethod[] = ["クレジット", "現金", "PayPay", "QR", "ホットペッパーポイント", "その他"];
 
 export interface Payment {
   method: PaymentMethod;

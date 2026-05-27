@@ -100,13 +100,12 @@ function CheckoutBody({ reservation: r, onComplete, onClose }: { reservation: Re
   const heldTickets = (customer?.tickets ?? []).filter((t) => t.remaining > 0);
 
   const [lines, setLines] = React.useState<LineItem[]>(() => initialLines(r));
-  const [payments, setPayments] = React.useState<PayRow[]>([]);
-  const [payMethod, setPayMethod] = React.useState<PaymentMethod>("現金");
-  const [payAmount, setPayAmount] = React.useState<string>("");
+  const [payments, setPayments] = React.useState<PayRow[]>(() => [{ id: "p0", method: "クレジット", amount: computeTotals(initialLines(r)).total }]);
   const [serviceStaffId, setServiceStaffId] = React.useState(r.staffId);
   const [cashierStaffId, setCashierStaffId] = React.useState(r.staffId);
   const [ticketSellStaffId, setTicketSellStaffId] = React.useState(r.staffId);
   const [ticketUseStaffId, setTicketUseStaffId] = React.useState(r.staffId);
+  const [shares, setShares] = React.useState<number[]>(() => (r.assignments ?? []).map((a) => Math.round((a.share ?? (a.role === "MAIN" ? 1 : 0)) * 100)));
   const [ticketId, setTicketId] = React.useState(heldTickets[0]?.id ?? "");
   const [consumeCount, setConsumeCount] = React.useState(1);
   const [discKind, setDiscKind] = React.useState<"amount" | "percent" | "coupon">("amount");
@@ -123,6 +122,20 @@ function CheckoutBody({ reservation: r, onComplete, onClose }: { reservation: Re
   const hasTicketBuy = lines.some((l) => l.kind === "ticketBuy");
   const hasTicketUse = lines.some((l) => l.kind === "ticketUse");
   const canConfirm = totals.total === 0 ? true : paidSum >= totals.total;
+  const shareSum = shares.reduce((s, n) => s + n, 0);
+
+  // 合計が変わったら単一支払いの金額を自動追従(全額自動入力)
+  React.useEffect(() => {
+    setPayments((ps) => (ps.length === 1 ? [{ ...ps[0], amount: totals.total }] : ps));
+  }, [totals.total]);
+
+  function addPaymentRow() {
+    const rem = Math.max(0, totals.total - paidSum);
+    setPayments((ps) => [...ps, { id: `pay-${Date.now()}`, method: "現金", amount: rem }]);
+  }
+  function updatePayment(id: string, patch: Partial<PayRow>) {
+    setPayments((ps) => ps.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  }
 
   function addLine(p: Partial<LineItem> & Pick<LineItem, "kind" | "name" | "amount">) {
     setLines((ls) => [...ls, { id: `${p.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, ...p }]);
@@ -157,13 +170,6 @@ function CheckoutBody({ reservation: r, onComplete, onClose }: { reservation: Re
     setDiscValue("");
   }
 
-  function addPayment() {
-    const amt = payAmount === "" ? Math.max(0, shortage) : Number(payAmount) || 0;
-    if (amt <= 0) return;
-    setPayments((ps) => [...ps, { id: `pay-${Date.now()}`, method: payMethod, amount: amt }]);
-    setPayAmount("");
-  }
-
   function confirm() {
     const consumed = lines
       .filter((l) => l.kind === "ticketUse" && l.ticketId)
@@ -174,7 +180,7 @@ function CheckoutBody({ reservation: r, onComplete, onClose }: { reservation: Re
     // 口コミタグを顧客に保存(モック: 共有データへ反映)
     const reviewTags = REVIEW_OPTIONS.filter((o) => reviews.has(o.key)).map((o) => o.tag);
     if (customer) reviewTags.forEach((tag) => { if (!customer.tags.includes(tag)) customer.tags.push(tag); });
-    const finalPayments = payments.length ? payments : totals.total === 0 ? [] : [{ id: "p", method: payMethod, amount: totals.total }];
+    const finalPayments = totals.total === 0 ? [] : payments;
     onComplete(r.id, {
       reservationId: r.id,
       collected: totals.total,
@@ -187,7 +193,7 @@ function CheckoutBody({ reservation: r, onComplete, onClose }: { reservation: Re
     setResult({
       reviewTags,
       totals,
-      payments: payments.length ? payments : totals.total === 0 ? [] : [{ id: "p", method: payMethod, amount: totals.total }],
+      payments: totals.total === 0 ? [] : payments,
       serviceStaff: staffById(serviceStaffId)?.name,
       cashierStaff: staffById(cashierStaffId)?.name,
       ticketSellStaff: hasTicketBuy ? staffById(ticketSellStaffId)?.name : undefined,
@@ -299,6 +305,26 @@ function CheckoutBody({ reservation: r, onComplete, onClose }: { reservation: Re
             </div>
           </div>
 
+          {/* 売上配分 (複数担当時) */}
+          {r.assignments && r.assignments.length > 0 && (
+            <div className="space-y-2 rounded-xl border border-border p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted-foreground">売上配分</span>
+                <span className={cn("text-[11px] font-medium tabular-nums", shareSum === 100 ? "text-emerald-600" : "text-rose-600")}>合計 {shareSum}%</span>
+              </div>
+              {r.assignments.map((a, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: staffById(a.staffId)?.color }} />
+                  <span className="min-w-0 flex-1 truncate">{staffById(a.staffId)?.name} <span className="text-[11px] text-muted-foreground">{a.role === "MAIN" ? "主担当" : a.role === "SUB" ? a.label : "補助"}</span></span>
+                  <input type="number" value={shares[i] ?? 0} onChange={(e) => setShares((s) => s.map((v, j) => (j === i ? Math.max(0, Number(e.target.value) || 0) : v)))} className="h-7 w-16 rounded-md border border-input bg-card px-2 text-right text-xs tabular-nums" />
+                  <span className="text-xs text-muted-foreground">%</span>
+                </div>
+              ))}
+              {shareSum !== 100 && <p className="flex items-center gap-1 text-[11px] text-rose-600"><AlertTriangle className="h-3 w-3" />配分合計が100%になっていません</p>}
+              <p className="text-[10px] text-muted-foreground">※ 初期値は主担当100%。スタッフ別売上・KPIへ反映されます（将来：会計明細ごとの担当割当にも対応）。</p>
+            </div>
+          )}
+
           {/* 口コミ */}
           <div className="space-y-2 rounded-xl border border-border p-3">
             <div className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
@@ -347,26 +373,23 @@ function CheckoutBody({ reservation: r, onComplete, onClose }: { reservation: Re
             </div>
           </div>
 
-          {/* 支払い(複合対応) */}
+          {/* 支払い(全額自動入力・複合対応) */}
           <div className="rounded-xl border border-border p-3">
-            <div className="mb-2 text-xs font-semibold text-muted-foreground">支払い方法（複合可）</div>
-            <div className="space-y-1 mb-2">
-              {payments.map((p, i) => (
-                <div key={p.id} className="flex items-center gap-2 text-sm">
-                  <span className="w-5 text-[11px] text-muted-foreground">{i + 1}.</span>
-                  <span className="flex-1">{p.method}</span>
-                  <span className="tabular-nums">{yen(p.amount)}</span>
-                  <button onClick={() => setPayments((ps) => ps.filter((x) => x.id !== p.id))} className="text-muted-foreground hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
+            <div className="mb-2 text-xs font-semibold text-muted-foreground">支払い方法</div>
+            <div className="mb-2 space-y-1.5">
+              {payments.map((p) => (
+                <div key={p.id} className="flex items-center gap-1.5">
+                  <select value={p.method} onChange={(e) => updatePayment(p.id, { method: e.target.value as PaymentMethod })} className="h-8 flex-1 rounded-md border border-input bg-card px-2 text-xs">
+                    {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                  <input type="number" value={p.amount} onChange={(e) => updatePayment(p.id, { amount: Number(e.target.value) || 0 })} className="h-8 w-24 rounded-md border border-input bg-card px-2 text-right text-xs tabular-nums" />
+                  {payments.length > 1 && (
+                    <button onClick={() => setPayments((ps) => ps.filter((x) => x.id !== p.id))} className="text-muted-foreground hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
+                  )}
                 </div>
               ))}
             </div>
-            <div className="flex items-center gap-1.5">
-              <select value={payMethod} onChange={(e) => setPayMethod(e.target.value as PaymentMethod)} className="h-8 rounded-md border border-input bg-card px-2 text-xs">
-                {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
-              <input type="number" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder={shortage > 0 ? String(shortage) : "0"} className="h-8 w-24 rounded-md border border-input bg-card px-2 text-right text-xs tabular-nums" />
-              <Button size="sm" variant="outline" onClick={addPayment}><Plus className="h-3.5 w-3.5" />追加</Button>
-            </div>
+            <Button size="sm" variant="outline" className="w-full" onClick={addPaymentRow}><Plus className="h-3.5 w-3.5" />支払い方法を追加（複合）</Button>
             <div className="mt-2 space-y-0.5 border-t border-border/60 pt-2 text-[11px]">
               <Line l="合計" v={yen(totals.total)} />
               <Line l="支払い済み" v={yen(paidSum)} />
