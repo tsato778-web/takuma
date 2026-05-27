@@ -31,6 +31,7 @@ export interface Ticket {
 export interface Customer {
   id: string;
   storeId: string;
+  customerNo: number; // 顧客No(カルテ番号)。表示は4桁ゼロ埋め
   name: string;
   kana: string;
   phone: string;
@@ -88,15 +89,19 @@ export const MENUS: Menu[] = [
 ];
 
 export const CUSTOMERS: Customer[] = [
-  { id: "cus_yamada", storeId: STORE.id, name: "山田 花子", kana: "ヤマダ ハナコ", phone: "090-1111-2222", tags: ["VIP", "敏感肌"], lineLinked: true, tickets: [{ name: "カット10回券", remaining: 3 }], visitCount: 12 },
-  { id: "cus_nakamura", storeId: STORE.id, name: "中村 ゆい", kana: "ナカムラ ユイ", phone: "090-3333-4444", tags: ["学割"], lineLinked: true, tickets: [], visitCount: 3 },
-  { id: "cus_ito", storeId: STORE.id, name: "伊藤 さくら", kana: "イトウ サクラ", phone: "090-5555-6666", tags: ["新規"], lineLinked: false, tickets: [], visitCount: 1 },
-  { id: "cus_takahashi", storeId: STORE.id, name: "高橋 健", kana: "タカハシ ケン", phone: "090-7777-8888", tags: [], lineLinked: true, tickets: [{ name: "カラー6回券", remaining: 1 }], visitCount: 8 },
-  { id: "cus_kobayashi", storeId: STORE.id, name: "小林 真央", kana: "コバヤシ マオ", phone: "090-9999-0000", tags: ["VIP"], lineLinked: true, tickets: [{ name: "スパ5回券", remaining: 4 }], visitCount: 21 },
-  { id: "cus_watanabe", storeId: STORE.id, name: "渡辺 あおい", kana: "ワタナベ アオイ", phone: "080-1234-5678", tags: ["敏感肌"], lineLinked: false, tickets: [], visitCount: 2 },
-  { id: "cus_saito", storeId: STORE.id, name: "斎藤 美月", kana: "サイトウ ミヅキ", phone: "080-8765-4321", tags: [], lineLinked: true, tickets: [], visitCount: 5 },
-  { id: "cus_kato", storeId: STORE.id, name: "加藤 結衣", kana: "カトウ ユイ", phone: "080-2222-3333", tags: ["紹介"], lineLinked: true, tickets: [{ name: "フェイシャル4回券", remaining: 2 }], visitCount: 7 },
+  { id: "cus_kobayashi", storeId: STORE.id, customerNo: 3, name: "小林 真央", kana: "コバヤシ マオ", phone: "090-9999-0000", tags: ["VIP"], lineLinked: true, tickets: [{ name: "スパ5回券", remaining: 4 }], visitCount: 21 },
+  { id: "cus_yamada", storeId: STORE.id, customerNo: 8, name: "山田 花子", kana: "ヤマダ ハナコ", phone: "090-1111-2222", tags: ["VIP", "敏感肌"], lineLinked: true, tickets: [{ name: "カット10回券", remaining: 3 }], visitCount: 12 },
+  { id: "cus_takahashi", storeId: STORE.id, customerNo: 12, name: "高橋 健", kana: "タカハシ ケン", phone: "090-7777-8888", tags: [], lineLinked: true, tickets: [{ name: "カラー6回券", remaining: 1 }], visitCount: 8 },
+  { id: "cus_nakamura", storeId: STORE.id, customerNo: 15, name: "中村 ゆい", kana: "ナカムラ ユイ", phone: "090-3333-4444", tags: ["学割"], lineLinked: true, tickets: [], visitCount: 3 },
+  { id: "cus_saito", storeId: STORE.id, customerNo: 19, name: "斎藤 美月", kana: "サイトウ ミヅキ", phone: "080-8765-4321", tags: [], lineLinked: true, tickets: [], visitCount: 5 },
+  { id: "cus_kato", storeId: STORE.id, customerNo: 22, name: "加藤 結衣", kana: "カトウ ユイ", phone: "080-2222-3333", tags: ["紹介"], lineLinked: true, tickets: [{ name: "フェイシャル4回券", remaining: 2 }], visitCount: 7 },
+  { id: "cus_watanabe", storeId: STORE.id, customerNo: 27, name: "渡辺 あおい", kana: "ワタナベ アオイ", phone: "080-1234-5678", tags: ["敏感肌"], lineLinked: false, tickets: [], visitCount: 2 },
+  { id: "cus_ito", storeId: STORE.id, customerNo: 31, name: "伊藤 さくら", kana: "イトウ サクラ", phone: "090-5555-6666", tags: ["新規"], lineLinked: false, tickets: [], visitCount: 1 },
 ];
+
+export function formatCustomerNo(no: number): string {
+  return String(no).padStart(4, "0");
+}
 
 export function dateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(

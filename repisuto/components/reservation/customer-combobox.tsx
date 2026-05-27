@@ -5,7 +5,7 @@ import { Search, Ticket as TicketIcon, MessageCircleOff, Check } from "lucide-re
 
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
-import { CUSTOMERS, ticketRemainingTotal, type Customer } from "@/lib/mock-data";
+import { CUSTOMERS, formatCustomerNo, ticketRemainingTotal, type Customer } from "@/lib/mock-data";
 
 interface Props {
   value: string | null;
@@ -20,9 +20,21 @@ export function CustomerCombobox({ value, onChange }: Props) {
   const results = React.useMemo(() => {
     const q = query.trim();
     if (!q) return CUSTOMERS.slice(0, 6);
-    return CUSTOMERS.filter(
-      (c) => c.name.includes(q) || c.kana.includes(q) || c.phone.includes(q)
+
+    // 顧客No の完全一致("8" でも "0008" でも可)は最優先
+    const isExactNo = (c: Customer) =>
+      q === String(c.customerNo) || q === formatCustomerNo(c.customerNo);
+
+    const exact = CUSTOMERS.filter(isExactNo);
+    const partial = CUSTOMERS.filter(
+      (c) =>
+        !isExactNo(c) &&
+        (formatCustomerNo(c.customerNo).includes(q) ||
+          c.name.includes(q) ||
+          c.kana.includes(q) ||
+          c.phone.includes(q))
     );
+    return [...exact, ...partial];
   }, [query]);
 
   function pick(c: Customer) {
@@ -37,7 +49,7 @@ export function CustomerCombobox({ value, onChange }: Props) {
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           className="pl-8"
-          placeholder="顧客を検索（名前・カナ・電話）"
+          placeholder="顧客を検索（No・名前・カナ・電話）"
           value={open ? query : selected ? selected.name : query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -50,6 +62,9 @@ export function CustomerCombobox({ value, onChange }: Props) {
 
       {selected && !open && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="font-mono tabular-nums text-muted-foreground">
+            {formatCustomerNo(selected.customerNo)}
+          </span>
           <span className="font-medium text-foreground">{selected.name}</span>
           <span className="text-muted-foreground">／来店{selected.visitCount}回</span>
           {selected.tags.map((t) => (
@@ -92,6 +107,9 @@ export function CustomerCombobox({ value, onChange }: Props) {
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
+                  <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+                    {formatCustomerNo(c.customerNo)}
+                  </span>
                   <span className="truncate text-sm font-medium">{c.name}</span>
                   <span className="shrink-0 text-[10px] text-muted-foreground">{c.kana}</span>
                 </div>
