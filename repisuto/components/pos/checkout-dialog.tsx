@@ -44,6 +44,7 @@ import {
   type LineKind,
   type PaymentMethod,
   type Totals,
+  type CheckoutSummary,
 } from "@/lib/pos";
 
 const LINE_TONE: Partial<Record<LineKind, string>> = {
@@ -82,7 +83,7 @@ export function CheckoutDialog({
 }: {
   reservation: Reservation | null;
   onOpenChange: (open: boolean) => void;
-  onComplete: (id: string) => void;
+  onComplete: (id: string, summary: CheckoutSummary) => void;
 }) {
   return (
     <Dialog open={!!r} onOpenChange={onOpenChange}>
@@ -93,7 +94,7 @@ export function CheckoutDialog({
   );
 }
 
-function CheckoutBody({ reservation: r, onComplete, onClose }: { reservation: Reservation; onComplete: (id: string) => void; onClose: () => void }) {
+function CheckoutBody({ reservation: r, onComplete, onClose }: { reservation: Reservation; onComplete: (id: string, summary: CheckoutSummary) => void; onClose: () => void }) {
   const customer = customerById(r.customerId ?? "");
   const staff = staffById(r.staffId);
   const heldTickets = (customer?.tickets ?? []).filter((t) => t.remaining > 0);
@@ -173,6 +174,16 @@ function CheckoutBody({ reservation: r, onComplete, onClose }: { reservation: Re
     // 口コミタグを顧客に保存(モック: 共有データへ反映)
     const reviewTags = REVIEW_OPTIONS.filter((o) => reviews.has(o.key)).map((o) => o.tag);
     if (customer) reviewTags.forEach((tag) => { if (!customer.tags.includes(tag)) customer.tags.push(tag); });
+    const finalPayments = payments.length ? payments : totals.total === 0 ? [] : [{ id: "p", method: payMethod, amount: totals.total }];
+    onComplete(r.id, {
+      reservationId: r.id,
+      collected: totals.total,
+      redeem: totals.redeem,
+      ticketBuy: totals.ticketBuy,
+      payments: finalPayments.map((p) => ({ method: p.method, amount: p.amount })),
+      serviceStaffId,
+      cashierStaffId,
+    });
     setResult({
       reviewTags,
       totals,
@@ -183,7 +194,6 @@ function CheckoutBody({ reservation: r, onComplete, onClose }: { reservation: Re
       ticketUseStaff: hasTicketUse ? staffById(ticketUseStaffId)?.name : undefined,
       consumed,
     });
-    onComplete(r.id);
   }
 
   if (result) {

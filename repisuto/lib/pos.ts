@@ -94,12 +94,23 @@ export const LINE_KIND_LABEL: Record<LineKind, string> = {
   referral: "紹介特典",
 };
 
-export type PaymentMethod = "現金" | "クレジット" | "PayPay" | "QR" | "その他";
-export const PAYMENT_METHODS: PaymentMethod[] = ["現金", "クレジット", "PayPay", "QR", "その他"];
+export type PaymentMethod = "現金" | "クレジット" | "PayPay" | "QR" | "ホットペッパーポイント" | "その他";
+export const PAYMENT_METHODS: PaymentMethod[] = ["現金", "クレジット", "PayPay", "QR", "ホットペッパーポイント", "その他"];
 
 export interface Payment {
   method: PaymentMethod;
   amount: number;
+}
+
+// 会計確定時に集計側へ渡すサマリー
+export interface CheckoutSummary {
+  reservationId: string;
+  collected: number; // 会計済み(収受) = 総売上ベース
+  redeem: number; // 回数券消化売上 = 消化売上ベース
+  ticketBuy: number; // 回数券購入売上
+  payments: Payment[];
+  serviceStaffId: string;
+  cashierStaffId: string;
 }
 
 export function initialLines(r: Reservation): LineItem[] {

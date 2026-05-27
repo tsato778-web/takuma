@@ -13,7 +13,19 @@ export interface Txn {
   ticketBuy: number; // うち回数券購入売上
   redeem: number; // 回数券消化売上(別計上)
   nextReserved: boolean;
+  returned: boolean; // 後日また来店したか(リピート判定)
+  payMethod: string; // 主決済種別
 }
+
+export const PAY_METHODS = ["現金", "クレジット", "PayPay", "QR", "ホットペッパーポイント", "その他"];
+const PAY_W: [string, number][] = [
+  ["現金", 0.2],
+  ["クレジット", 0.45],
+  ["PayPay", 0.12],
+  ["QR", 0.1],
+  ["ホットペッパーポイント", 0.08],
+  ["その他", 0.05],
+];
 
 const MEDIA_W: [string, number][] = [
   ["Instagram", 0.28],
@@ -78,7 +90,9 @@ function build(): Txn[] {
       const collected = collectedTech + retail + ticketBuy;
       const redeem = redeemFlag ? Math.round(menu.price * 0.9) : 0;
       const nextReserved = r() < STAFF_NEXT[staff.id] * (isNew ? 0.8 : 1.05);
-      txns.push({ date: iso, staffId: staff.id, menuId: menu.id, media, isNew, collected, ticketBuy, redeem, nextReserved });
+      const returned = r() < (isNew ? 0.45 : 0.78) * (STAFF_NEXT[staff.id] / 0.6);
+      const payMethod = pickWeighted(r(), PAY_W);
+      txns.push({ date: iso, staffId: staff.id, menuId: menu.id, media, isNew, collected, ticketBuy, redeem, nextReserved, returned, payMethod });
     }
   }
   return txns;
@@ -97,9 +111,12 @@ export interface Agg {
   redeem: number; // 消化ベース売上
   ticketBuy: number; // 回数券購入売上
   nextCount: number;
-  nextRate: number;
-  repeatCount: number;
-  repeatRate: number;
+  nextRate: number; // 次回予約率
+  repeatCount: number; // 再来(非新規)客数
+  returnedCount: number;
+  repeatRate: number; // リピート率(後日再来)
+  ticketBuyCount: number; // 回数券購入件数
+  ticketBuyRate: number; // 回数券購入率
   avgSpend: number;
 }
 
@@ -111,6 +128,8 @@ export function aggregate(txns: Txn[]): Agg {
   const total = collected + redeem;
   const nextCount = txns.filter((t) => t.nextReserved).length;
   const repeatCount = txns.filter((t) => !t.isNew).length;
+  const returnedCount = txns.filter((t) => t.returned).length;
+  const ticketBuyCount = txns.filter((t) => t.ticketBuy > 0).length;
   return {
     visits,
     total,
@@ -120,8 +139,33 @@ export function aggregate(txns: Txn[]): Agg {
     nextCount,
     nextRate: visits ? Math.round((nextCount / visits) * 100) : 0,
     repeatCount,
-    repeatRate: visits ? Math.round((repeatCount / visits) * 100) : 0,
+    returnedCount,
+    repeatRate: visits ? Math.round((returnedCount / visits) * 100) : 0,
+    ticketBuyCount,
+    ticketBuyRate: visits ? Math.round((ticketBuyCount / visits) * 100) : 0,
     avgSpend: visits ? Math.round(total / visits) : 0,
+  };
+}
+
+// 決済種別ごとの会計済み売上内訳
+export function paymentBreakdown(txns: Txn[]): { method: string; amount: number }[] {
+  return PAY_METHODS.map((m) => ({
+    method: m,
+    amount: txns.filter((t) => t.payMethod === m).reduce((s, t) => s + t.collected, 0),
+  }));
+}
+
+// リピート率の切り口(全体/初回/再来)
+export function repeatBreakdown(txns: Txn[]) {
+  const rate = (sub: Txn[]) => (sub.length ? Math.round((sub.filter((t) => t.returned).length / sub.length) * 100) : 0);
+  const first = txns.filter((t) => t.isNew);
+  const repeat = txns.filter((t) => !t.isNew);
+  return {
+    overall: rate(txns),
+    first: rate(first),
+    repeat: rate(repeat),
+    firstN: first.length,
+    repeatN: repeat.length,
   };
 }
 
