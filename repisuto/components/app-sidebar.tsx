@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 
 const NAV = [
   { label: "予約台帳", href: "/reservations", icon: CalendarDays, enabled: true },
-  { label: "顧客", href: "/customers", icon: Users, enabled: false },
+  { label: "顧客", href: "/customers", icon: Users, enabled: true },
   { label: "カルテ", href: "/records", icon: FileText, enabled: false },
   { label: "会計", href: "/pos", icon: Receipt, enabled: false },
   { label: "回数券", href: "/tickets", icon: Ticket, enabled: false },

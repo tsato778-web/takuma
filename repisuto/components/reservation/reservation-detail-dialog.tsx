@@ -23,6 +23,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { UserRound } from "lucide-react";
 import { minToLabel } from "@/lib/time";
 import {
   blockTitle,
@@ -52,9 +53,10 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   onUpdate: (id: string, patch: Partial<Reservation>) => void;
   onDelete: (id: string) => void;
+  onOpenCustomer?: (customerId: string) => void;
 }
 
-export function ReservationDetailDialog({ reservation: r, onOpenChange, onUpdate, onDelete }: Props) {
+export function ReservationDetailDialog({ reservation: r, onOpenChange, onUpdate, onDelete, onOpenCustomer }: Props) {
   const isReservation = r?.kind === "RESERVATION";
   const customer = r && isReservation ? customerById(r.customerId ?? "") : undefined;
   const staff = r ? staffById(r.staffId) : undefined;
@@ -152,6 +154,17 @@ export function ReservationDetailDialog({ reservation: r, onOpenChange, onUpdate
                 </span>
               )}
             </div>
+
+            {r.customerId && onOpenCustomer && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => onOpenCustomer(r.customerId!)}
+              >
+                <UserRound className="h-4 w-4" /> 顧客詳細を開く
+              </Button>
+            )}
 
             {canceled ? (
               <div className="space-y-2 rounded-md border border-border bg-slate-50 p-3">

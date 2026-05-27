@@ -9,6 +9,7 @@ import { ReservationBlock } from "./reservation-block";
 import { NewReservationDialog } from "./new-reservation-dialog";
 import { ReservationDetailDialog } from "./reservation-detail-dialog";
 import { NotificationBell } from "@/components/notification-bell";
+import { CustomerDrawer } from "@/components/customer/customer-drawer";
 import { DailyMemoBar } from "./daily-memo-bar";
 import { SEED_NOTIFICATIONS, type AppNotification } from "@/lib/notifications";
 import { SEED_MEMOS, type DailyMemo } from "@/lib/memos";
@@ -35,6 +36,7 @@ import {
   dateKey,
   occupiesSlot,
   blockTitle,
+  customerById,
   type Reservation,
 } from "@/lib/mock-data";
 
@@ -58,6 +60,7 @@ export function ReservationBoard() {
   const [createOpen, setCreateOpen] = React.useState(false);
   const [prefill, setPrefill] = React.useState<{ staffId: string; start: number } | null>(null);
   const [detailId, setDetailId] = React.useState<string | null>(null);
+  const [drawerCustomerId, setDrawerCustomerId] = React.useState<string | null>(null);
   const [preview, setPreview] = React.useState<Preview | null>(null);
   const [notifications, setNotifications] = React.useState<AppNotification[]>(SEED_NOTIFICATIONS);
   const [memos, setMemos] = React.useState<DailyMemo[]>(SEED_MEMOS);
@@ -449,6 +452,14 @@ export function ReservationBoard() {
         onOpenChange={(o) => !o && setDetailId(null)}
         onUpdate={updateRes}
         onDelete={deleteRes}
+        onOpenCustomer={(id) => {
+          setDetailId(null);
+          setDrawerCustomerId(id);
+        }}
+      />
+      <CustomerDrawer
+        customer={drawerCustomerId ? customerById(drawerCustomerId) ?? null : null}
+        onOpenChange={(o) => !o && setDrawerCustomerId(null)}
       />
     </div>
   );
