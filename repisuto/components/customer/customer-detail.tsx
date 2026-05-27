@@ -11,15 +11,13 @@ import {
   ExternalLink,
   ArrowRight,
   AlertTriangle,
-  Camera,
   CheckCircle2,
   Send,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { ChartDetailDialog } from "@/components/chart/chart-detail-dialog";
-import { chartsForCustomer, CHART_STATUS_STYLE, type ChartRecord } from "@/lib/charts";
+import { CustomerChart } from "@/components/chart/customer-chart";
 import {
   formatCustomerNo,
   staffById,
@@ -324,45 +322,7 @@ function VisitsTab({ c }: { c: Customer }) {
 
 // ============ 3. カルテ ============
 function ChartTab({ c }: { c: Customer }) {
-  const [records, setRecords] = React.useState<ChartRecord[]>(() => chartsForCustomer(c));
-  const [open, setOpen] = React.useState<ChartRecord | null>(null);
-
-  React.useEffect(() => {
-    setRecords(chartsForCustomer(c));
-  }, [c]);
-
-  function save(u: ChartRecord) {
-    setRecords((rs) => rs.map((r) => (r.id === u.id ? u : r)));
-  }
-
-  return (
-    <div className="space-y-3">
-      <SectionTitle>施術カルテ（{records.length}件）</SectionTitle>
-      {records.map((r) => (
-        <Card
-          key={r.id}
-          className="cursor-pointer space-y-1.5 transition-colors hover:border-primary/40"
-          onClick={() => setOpen(r)}
-        >
-          <div className="flex items-center justify-between">
-            <div className="text-sm font-semibold">{jpDate(r.date)} ・ {r.menus}</div>
-            <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", CHART_STATUS_STYLE[r.status])}>
-              {r.status}
-            </span>
-          </div>
-          <div className="text-[11px] text-muted-foreground">担当 {r.staffName}</div>
-          {r.status === "未記入" ? (
-            <div className="flex items-center gap-1 text-xs font-medium text-rose-600">
-              <Camera className="h-3.5 w-3.5" /> カルテ未記入 — タップして記入
-            </div>
-          ) : (
-            <div className="truncate text-xs text-muted-foreground">{r.treatment}</div>
-          )}
-        </Card>
-      ))}
-      <ChartDetailDialog record={open} onOpenChange={(o) => !o && setOpen(null)} onSave={save} />
-    </div>
-  );
+  return <CustomerChart customer={c} />;
 }
 
 // ============ 4. 会計 ============

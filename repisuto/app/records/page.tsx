@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { STAFF } from "@/lib/mock-data";
 import { jpDate, TODAY } from "@/lib/customer-data";
 import { allCharts, CHART_STATUS_STYLE, type ChartRecord, type ChartStatus } from "@/lib/charts";
-import { ChartDetailDialog } from "@/components/chart/chart-detail-dialog";
+import { ChartDialog } from "@/components/chart/chart-detail-dialog";
 
 const STATUS_OPTIONS: (ChartStatus | "all" | "pending")[] = ["all", "pending", "未記入", "下書き", "記入済"];
 const STATUS_LABEL: Record<string, string> = {
@@ -19,8 +19,8 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default function RecordsPage() {
-  const [records, setRecords] = React.useState<ChartRecord[]>(() => allCharts());
-  const [open, setOpen] = React.useState<ChartRecord | null>(null);
+  const [records] = React.useState<ChartRecord[]>(() => allCharts());
+  const [open, setOpen] = React.useState<{ customerId: string; visitId: string } | null>(null);
   const [q, setQ] = React.useState("");
   const [staff, setStaff] = React.useState("");
   const [status, setStatus] = React.useState<(typeof STATUS_OPTIONS)[number]>("all");
@@ -43,10 +43,6 @@ export default function RecordsPage() {
       return true;
     });
   }, [records, q, staff, status]);
-
-  function save(u: ChartRecord) {
-    setRecords((rs) => rs.map((r) => (r.id === u.id ? u : r)));
-  }
 
   return (
     <div className="flex h-full flex-col">
@@ -118,7 +114,7 @@ export default function RecordsPage() {
               {list.map((r) => (
                 <tr
                   key={r.id}
-                  onClick={() => setOpen(r)}
+                  onClick={() => setOpen({ customerId: r.customerId, visitId: r.id })}
                   className={cn(
                     "cursor-pointer border-b border-border/60 transition-colors last:border-0",
                     r.status === "未記入" ? "bg-rose-50/50 hover:bg-rose-50" : "hover:bg-secondary/40"
@@ -157,7 +153,12 @@ export default function RecordsPage() {
         <p className="mt-3 text-[11px] text-muted-foreground">行をクリックでカルテを表示・編集できます。未記入は赤背景で表示されます。</p>
       </div>
 
-      <ChartDetailDialog record={open} onOpenChange={(o) => !o && setOpen(null)} onSave={save} />
+      <ChartDialog
+        open={!!open}
+        customerId={open?.customerId ?? null}
+        initialVisitId={open?.visitId}
+        onOpenChange={(o) => !o && setOpen(null)}
+      />
     </div>
   );
 }
