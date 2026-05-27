@@ -18,7 +18,14 @@ import {
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { formatCustomerNo, type Customer } from "@/lib/mock-data";
+import {
+  formatCustomerNo,
+  staffById,
+  ticketStatus,
+  isChurnRisk,
+  isNewCustomer,
+  type Customer,
+} from "@/lib/mock-data";
 import {
   visitHistory,
   accountingSummary,
@@ -32,6 +39,8 @@ import {
   CROSS_ANALYSIS,
   daysBetween,
   jpDate,
+  ageFromBirthday,
+  ageBand,
 } from "@/lib/customer-data";
 
 const yen = (n: number) => `¥${n.toLocaleString()}`;
@@ -100,6 +109,13 @@ export function CustomerDetail({
 
 // ============ ヘッダー ============
 function CustomerHeader({ c, onOpenFull, onLine }: { c: Customer; onOpenFull?: () => void; onLine: () => void }) {
+  const ts = ticketStatus(c);
+  const risk = isChurnRisk(c);
+  const age = ageFromBirthday(c.birthday);
+  const band = ageBand(age);
+  const concerns = c.messageTags.filter((t) => !/代$/.test(t) && t !== "VIP" && t !== "新規");
+  const mainStaff = staffById(c.mainStaffId)?.name;
+
   return (
     <div className="border-b border-border bg-gradient-to-br from-card to-secondary/40 px-5 pb-4 pt-5">
       <div className="flex items-start gap-3">
@@ -110,25 +126,23 @@ function CustomerHeader({ c, onOpenFull, onLine }: { c: Customer; onOpenFull?: (
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-lg font-semibold">{c.name}</span>
             <span className="text-xs text-muted-foreground">{c.kana}</span>
-            {c.monthlyMember.active && (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
-                <Crown className="h-3 w-3" /> 月額会員
-              </span>
-            )}
           </div>
           <div className="mt-0.5 text-xs text-muted-foreground">
-            No.{formatCustomerNo(c.customerNo)} ・ {c.gender === "F" ? "女性" : "男性"} ・ {c.phone}
+            No.{formatCustomerNo(c.customerNo)} ・ {c.phone} ・ 担当 <span className="font-medium text-foreground">{mainStaff}</span>
           </div>
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            {c.tags.map((t) => (
-              <span key={t} className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground">
-                {t}
-              </span>
-            ))}
-            {c.messageTags.map((t) => (
-              <span key={t} className="rounded bg-accent/12 px-1.5 py-0.5 text-[10px] font-medium text-accent">
-                #{t}
-              </span>
+
+          {/* 属性タグ (一目で分かる) */}
+          <div className="mt-2 flex flex-wrap gap-1">
+            <AttrTag>{c.gender === "F" ? "女性" : "男性"}</AttrTag>
+            {band && <AttrTag>{band}</AttrTag>}
+            <AttrTag tone="media">{c.firstSource}</AttrTag>
+            {c.tags.includes("VIP") && <AttrTag tone="vip"><Crown className="h-3 w-3" />VIP</AttrTag>}
+            {isNewCustomer(c) && <AttrTag tone="new">新規</AttrTag>}
+            {c.monthlyMember.active && <AttrTag tone="vip"><Crown className="h-3 w-3" />月額会員</AttrTag>}
+            <AttrTag tone={ts.tone === "warn" || ts.tone === "danger" ? ts.tone : "default"}>回数券 {ts.label}</AttrTag>
+            {risk && <AttrTag tone="danger"><AlertTriangle className="h-3 w-3" />要フォロー</AttrTag>}
+            {concerns.map((t) => (
+              <AttrTag key={t} tone="concern">#{t}</AttrTag>
             ))}
           </div>
         </div>
@@ -136,10 +150,14 @@ function CustomerHeader({ c, onOpenFull, onLine }: { c: Customer; onOpenFull?: (
 
       {/* サマリKPI */}
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Stat label="LTV" value={yen(c.ltv)} accent />
+        <Stat label="LTV" value={yen(c.ltv)} tone="accent" />
         <Stat label="最終来店" value={jpDate(c.lastVisitDate)} />
-        <Stat label="次回予約" value={c.nextVisitDate ? jpDate(c.nextVisitDate) : "なし"} />
-        <Stat label="回数券残" value={`${c.tickets.reduce((s, t) => s + t.remaining, 0)}回`} />
+        <Stat label="次回予約" value={c.nextVisitDate ? jpDate(c.nextVisitDate) : "なし"} tone={c.nextVisitDate ? undefined : "warn"} />
+        <Stat
+          label="回数券残"
+          value={ts.tone === "none" ? "なし" : `${ts.total}回`}
+          tone={ts.tone === "warn" ? "warn" : ts.tone === "danger" ? "danger" : undefined}
+        />
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
@@ -159,11 +177,48 @@ function CustomerHeader({ c, onOpenFull, onLine }: { c: Customer; onOpenFull?: (
   );
 }
 
-function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function AttrTag({
+  children,
+  tone = "default",
+}: {
+  children: React.ReactNode;
+  tone?: "default" | "media" | "vip" | "new" | "concern" | "warn" | "danger";
+}) {
+  const cls = {
+    default: "bg-secondary text-secondary-foreground",
+    media: "bg-sky-100 text-sky-700",
+    vip: "bg-amber-100 text-amber-700",
+    new: "bg-rose-100 text-rose-700",
+    concern: "bg-accent/12 text-accent",
+    warn: "bg-amber-100 text-amber-700",
+    danger: "bg-rose-100 text-rose-700",
+  }[tone];
   return (
-    <div className="rounded-lg border border-border bg-card px-3 py-2">
+    <span className={cn("inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium", cls)}>
+      {children}
+    </span>
+  );
+}
+
+function Stat({ label, value, tone }: { label: string; value: string; tone?: "accent" | "warn" | "danger" }) {
+  return (
+    <div
+      className={cn(
+        "rounded-lg border bg-card px-3 py-2",
+        tone === "warn" ? "border-amber-200 bg-amber-50/60" : tone === "danger" ? "border-rose-200 bg-rose-50/60" : "border-border"
+      )}
+    >
       <div className="text-[10px] text-muted-foreground">{label}</div>
-      <div className={cn("text-sm font-semibold tabular-nums", accent && "text-accent")}>{value}</div>
+      <div
+        className={cn(
+          "text-sm font-semibold tabular-nums",
+          tone === "accent" && "text-accent",
+          tone === "warn" && "text-amber-700",
+          tone === "danger" && "text-rose-700"
+        )}
+      >
+        {value}
+      </div>
     </div>
   );
 }
@@ -186,6 +241,8 @@ function Card({ children, className }: { children: React.ReactNode; className?: 
 
 // ============ 1. 基本情報 ============
 function BasicTab({ c }: { c: Customer }) {
+  const age = ageFromBirthday(c.birthday);
+  const staffName = (id: string) => staffById(id)?.name ?? "—";
   return (
     <div className="space-y-4">
       <Card>
@@ -195,7 +252,16 @@ function BasicTab({ c }: { c: Customer }) {
         <Row label="カナ" value={c.kana} />
         <Row label="電話番号" value={c.phone} />
         <Row label="性別" value={c.gender === "F" ? "女性" : "男性"} />
-        <Row label="LINE連携" value={c.lineLinked ? <span className="text-emerald-600">連携済み</span> : <span className="text-amber-600">未連携</span>} />
+        <Row label="生年月日" value={c.birthday ? c.birthday.replace(/-/g, "/") : "—"} />
+        <Row label="年齢" value={age !== null ? `${age}歳` : "—"} />
+        <Row label="LINE連携" value={c.lineLinked ? <span className="text-emerald-600">連携済み（{c.lineName ?? "—"}）</span> : <span className="text-amber-600">未連携</span>} />
+      </Card>
+      <Card>
+        <SectionTitle>担当者</SectionTitle>
+        <Row label="主担当" value={<span className="font-semibold">{staffName(c.mainStaffId)}</span>} />
+        <Row label="初回担当" value={staffName(c.firstStaffId)} />
+        <Row label="前回担当" value={staffName(c.lastStaffId)} />
+        <Row label="次回担当" value={staffName(c.mainStaffId)} />
       </Card>
       <Card>
         <SectionTitle>媒体・流入</SectionTitle>
@@ -285,7 +351,7 @@ function PosTab({ c }: { c: Customer }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-2">
-        <Stat label="累計LTV" value={yen(a.ltv)} accent />
+        <Stat label="累計LTV" value={yen(a.ltv)} tone="accent" />
         <Stat label="来店回数" value={`${a.visitCount}回`} />
         <Stat label="平均単価" value={yen(a.avgSpend)} />
       </div>
@@ -310,22 +376,41 @@ function PosTab({ c }: { c: Customer }) {
 // ============ 5. 回数券 ============
 function TicketsTab({ c }: { c: Customer }) {
   const history = ticketHistory(c);
+  const risk = isChurnRisk(c);
   return (
     <div className="space-y-4">
+      {risk && (
+        <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          回数券残なし・次回予約なし。離反リスクが高いためフォローを推奨します。
+        </div>
+      )}
       <div>
         <SectionTitle>保有回数券</SectionTitle>
-        {c.tickets.length === 0 && <Card className="text-sm text-muted-foreground">保有なし</Card>}
+        {c.tickets.length === 0 && (
+          <Card className="flex items-center gap-2 text-sm text-amber-700">
+            <AlertTriangle className="h-4 w-4" /> 回数券なし（追加販売の好機）
+          </Card>
+        )}
         <div className="space-y-2">
-          {c.tickets.map((t) => (
-            <Card key={t.name} className="flex items-center gap-3 p-3">
-              <TicketIcon className="h-5 w-5 text-accent" />
-              <div className="flex-1">
-                <div className="text-sm font-medium">{t.name}</div>
-                <div className="text-[11px] text-muted-foreground">残り {t.remaining} 回</div>
-              </div>
-              <span className="rounded-full bg-accent/12 px-2 py-0.5 text-xs font-semibold text-accent">残{t.remaining}</span>
-            </Card>
-          ))}
+          {c.tickets.map((t) => {
+            const tone = t.remaining === 0 ? "danger" : t.remaining === 1 ? "warn" : "ok";
+            const toneCls = tone === "danger" ? "border-rose-200 bg-rose-50/60" : tone === "warn" ? "border-amber-200 bg-amber-50/60" : "border-border";
+            const badgeCls = tone === "danger" ? "bg-rose-100 text-rose-700" : tone === "warn" ? "bg-amber-100 text-amber-700" : "bg-accent/12 text-accent";
+            const iconCls = tone === "danger" ? "text-rose-500" : tone === "warn" ? "text-amber-500" : "text-accent";
+            return (
+              <Card key={t.name} className={cn("flex items-center gap-3 p-3", toneCls)}>
+                <TicketIcon className={cn("h-5 w-5", iconCls)} />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">{t.name}</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    残り {t.remaining} 回{t.remaining <= 1 && <span className="ml-1 font-medium text-amber-700">{t.remaining === 0 ? "・要追加販売" : "・残りわずか"}</span>}
+                  </div>
+                </div>
+                <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", badgeCls)}>残{t.remaining}</span>
+              </Card>
+            );
+          })}
         </div>
       </div>
       <Card className="flex items-center gap-3">

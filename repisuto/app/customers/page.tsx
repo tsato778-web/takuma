@@ -8,15 +8,24 @@ import {
   MEDIA_OPTIONS,
   formatCustomerNo,
   ticketRemainingTotal,
+  ticketStatus,
   isChurnRisk,
   isNewCustomer,
   type Customer,
+  type TicketTone,
 } from "@/lib/mock-data";
 import { jpDate, nextVisitLabel } from "@/lib/customer-data";
 import { CustomerDrawer } from "@/components/customer/customer-drawer";
 import { cn } from "@/lib/utils";
 
 const yen = (n: number) => `¥${n.toLocaleString()}`;
+
+const TICKET_TONE: Record<TicketTone, string> = {
+  ok: "bg-accent/12 text-accent",
+  warn: "bg-amber-100 text-amber-700",
+  danger: "bg-rose-100 text-rose-700",
+  none: "text-muted-foreground",
+};
 
 const SORTS = [
   { id: "no", label: "会員番号順" },
@@ -227,7 +236,7 @@ export default function CustomersPage() {
             </thead>
             <tbody>
               {list.map((c) => {
-                const tickets = ticketRemainingTotal(c);
+                const ts = ticketStatus(c);
                 const risk = isChurnRisk(c);
                 const next = nextVisitLabel(c);
                 return (
@@ -253,16 +262,19 @@ export default function CustomersPage() {
                     <td className="px-4 py-2.5 text-right font-semibold tabular-nums">{yen(c.ltv)}</td>
                     <td className="px-4 py-2.5 text-xs tabular-nums">{jpDate(c.lastVisitDate)}</td>
                     <td className="px-4 py-2.5 text-xs tabular-nums">
-                      {next ? <span className="text-foreground">{next}</span> : <span className="text-muted-foreground">なし</span>}
+                      {next ? (
+                        <span className="text-foreground">{next}</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-0.5 font-medium text-amber-600">
+                          <AlertTriangle className="h-3 w-3" />なし
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-2.5">
-                      {tickets > 0 ? (
-                        <span className="inline-flex items-center gap-0.5 rounded bg-accent/12 px-1.5 py-0.5 text-[11px] font-medium text-accent">
-                          <TicketIcon className="h-3 w-3" />残{tickets}
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-muted-foreground">なし</span>
-                      )}
+                      <span className={cn("inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px] font-medium", TICKET_TONE[ts.tone])}>
+                        {ts.tone !== "none" && <TicketIcon className="h-3 w-3" />}
+                        {ts.label}
+                      </span>
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-1">

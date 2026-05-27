@@ -45,6 +45,25 @@ export function nextVisitLabel(c: { nextVisitDate?: string; nextVisitTime?: stri
   return `${jpDate(c.nextVisitDate)}${c.nextVisitTime ? ` ${c.nextVisitTime}` : ""}`;
 }
 
+// 生年月日から満年齢を計算 (基準: TODAY)
+export function ageFromBirthday(birthday?: string): number | null {
+  if (!birthday) return null;
+  const b = parseISO(birthday);
+  const t = parseISO(TODAY);
+  let age = t.getFullYear() - b.getFullYear();
+  const m = t.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && t.getDate() < b.getDate())) age--;
+  return age;
+}
+
+// 年齢から年代ラベル
+export function ageBand(age: number | null): string | null {
+  if (age === null) return null;
+  if (age < 20) return "10代";
+  if (age >= 50) return "50代以上";
+  return `${Math.floor(age / 10) * 10}代`;
+}
+
 // ---- 来店履歴 ----
 export interface VisitRecord {
   id: string;
