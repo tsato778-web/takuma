@@ -10,6 +10,26 @@ export type ReservationStatus =
 
 export type ReservationSource = "LINE" | "PHONE" | "WALK_IN" | "MANUAL";
 
+// キャンセル種別 (KPI分析用に保持)
+export type CancelType = "ADVANCE" | "SAME_DAY" | "NO_SHOW";
+export const CANCEL_TYPE_LABEL: Record<CancelType, string> = {
+  ADVANCE: "事前キャンセル",
+  SAME_DAY: "当日キャンセル",
+  NO_SHOW: "無断キャンセル",
+};
+
+// コース別カラー (淡い高級感トーン)
+export type MenuColor = "blue" | "purple" | "green" | "pink" | "teal" | "amber" | "slate";
+export const MENU_COLOR: Record<MenuColor, { tint: string; ring: string; dot: string }> = {
+  blue: { tint: "bg-sky-50/90", ring: "ring-sky-200", dot: "bg-sky-400" },
+  purple: { tint: "bg-violet-50/90", ring: "ring-violet-200", dot: "bg-violet-400" },
+  green: { tint: "bg-emerald-50/90", ring: "ring-emerald-200", dot: "bg-emerald-400" },
+  pink: { tint: "bg-pink-50/90", ring: "ring-pink-200", dot: "bg-pink-400" },
+  teal: { tint: "bg-teal-50/90", ring: "ring-teal-200", dot: "bg-teal-400" },
+  amber: { tint: "bg-amber-50/90", ring: "ring-amber-200", dot: "bg-amber-400" },
+  slate: { tint: "bg-card", ring: "ring-border", dot: "bg-slate-400" },
+};
+
 export interface Store {
   id: string;
   name: string;
@@ -47,6 +67,7 @@ export interface Menu {
   name: string;
   durationMin: number;
   price: number;
+  color: MenuColor;
 }
 
 // 枠の種別。RESERVATION のみ顧客を伴う。他は「予約不可枠」(ダークアウト表示)
@@ -64,6 +85,7 @@ export interface Reservation {
   start: number; // 0時からの分
   end: number;
   status: ReservationStatus;
+  cancelType?: CancelType; // status=CANCELED のとき種別を保持 (KPI用)
   source: ReservationSource;
   isNominated: boolean;
   paid: boolean; // 会計済みか (未会計表示用)
@@ -92,12 +114,12 @@ export const STAFF: Staff[] = [
 ];
 
 export const MENUS: Menu[] = [
-  { id: "menu_cut", storeId: STORE.id, name: "カット", durationMin: 60, price: 4400 },
-  { id: "menu_color", storeId: STORE.id, name: "カラー", durationMin: 90, price: 6600 },
-  { id: "menu_perm", storeId: STORE.id, name: "パーマ", durationMin: 120, price: 8800 },
-  { id: "menu_treat", storeId: STORE.id, name: "トリートメント", durationMin: 30, price: 3300 },
-  { id: "menu_spa", storeId: STORE.id, name: "ヘッドスパ", durationMin: 45, price: 5500 },
-  { id: "menu_face", storeId: STORE.id, name: "フェイシャル", durationMin: 60, price: 9900 },
+  { id: "menu_cut", storeId: STORE.id, name: "カット", durationMin: 60, price: 4400, color: "blue" },
+  { id: "menu_color", storeId: STORE.id, name: "カラー", durationMin: 90, price: 6600, color: "purple" },
+  { id: "menu_perm", storeId: STORE.id, name: "パーマ", durationMin: 120, price: 8800, color: "amber" },
+  { id: "menu_treat", storeId: STORE.id, name: "トリートメント", durationMin: 30, price: 3300, color: "teal" },
+  { id: "menu_spa", storeId: STORE.id, name: "ヘッドスパ", durationMin: 45, price: 5500, color: "green" },
+  { id: "menu_face", storeId: STORE.id, name: "フェイシャル", durationMin: 60, price: 9900, color: "pink" },
 ];
 
 export const CUSTOMERS: Customer[] = [
@@ -145,6 +167,8 @@ function buildSeed(): Reservation[] {
     R({ id: "r6", customerId: "cus_kato", staffId: "stf_suzuki", menuIds: ["menu_perm"], start: 14 * 60 + 30, end: 16 * 60 + 30, source: "LINE", isNominated: true }),
     R({ id: "r7", customerId: "cus_saito", staffId: "stf_sato", menuIds: ["menu_color"], start: 15 * 60, end: 16 * 60 + 30, source: "PHONE" }),
     R({ id: "r8", customerId: "cus_watanabe", staffId: "stf_tanaka", menuIds: ["menu_face"], start: 16 * 60, end: 17 * 60, source: "WALK_IN" }),
+    // キャンセル履歴のサンプル(当日キャンセル)
+    R({ id: "rc1", customerId: "cus_kobayashi", staffId: "stf_sato", menuIds: ["menu_spa"], start: 13 * 60 + 30, end: 14 * 60 + 15, status: "CANCELED", cancelType: "SAME_DAY", source: "LINE" }),
     // 予約不可枠(ダークアウト)のサンプル
     R({ id: "b1", kind: "BREAK", staffId: "stf_sato", start: 12 * 60, end: 13 * 60 }),
     R({ id: "b2", kind: "MEETING", staffId: "stf_suzuki", start: 18 * 60, end: 18 * 60 + 30 }),
@@ -169,6 +193,17 @@ export function ticketRemainingTotal(c: Customer | undefined): number {
 
 // ログイン中ユーザー(個人メモの所有者判定などに使用)
 export const CURRENT_USER = { id: "user_sasaki", name: "佐々木", role: "MANAGER" as const };
+
+// 新規顧客判定 (来店1回以下 or 新規タグ)。台帳で強調表示する
+export const isNewCustomer = (c: Customer | undefined): boolean =>
+  !!c && (c.visitCount <= 1 || c.tags.includes("新規"));
+
+// コース別カラー (先頭メニュー基準)。メニュー未設定は slate
+export const reservationColor = (r: Reservation): MenuColor =>
+  menuById(r.menuIds[0] ?? "")?.color ?? "slate";
+
+// 顧客予約画面(◯×)での枠占有判定。キャンセルは空き枠として再解放する
+export const occupiesSlot = (r: Reservation): boolean => r.status !== "CANCELED";
 
 // 枠のタイトル表示(予約は顧客名、それ以外は種別ラベル/カスタムラベル)
 export function blockTitle(r: Reservation): string {

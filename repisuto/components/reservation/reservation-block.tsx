@@ -21,17 +21,13 @@ import {
   menuNames,
   staffById,
   ticketRemainingTotal,
+  isNewCustomer,
+  reservationColor,
+  MENU_COLOR,
+  CANCEL_TYPE_LABEL,
   type BlockKind,
   type Reservation,
 } from "@/lib/mock-data";
-
-const STATUS_STYLE: Record<Reservation["status"], string> = {
-  CONFIRMED: "bg-card border-border",
-  ARRIVED: "bg-primary/5 border-primary/40",
-  DONE: "bg-emerald-50 border-emerald-200",
-  NO_SHOW: "bg-rose-50 border-rose-300 border-dashed",
-  CANCELED: "opacity-40",
-};
 
 const BLOCK_ICON: Record<Exclude<BlockKind, "RESERVATION">, typeof Coffee> = {
   BREAK: Coffee,
@@ -76,7 +72,7 @@ export function ReservationBlock({
         e.stopPropagation();
         onResizePointerDown(e);
       }}
-      className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize bg-transparent group-hover:bg-white/30"
+      className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize bg-transparent group-hover:bg-black/10"
     />
   );
 
@@ -95,11 +91,8 @@ export function ReservationBlock({
         <div className="flex items-center gap-1 text-[11px] font-semibold">
           <Icon className="h-3 w-3 shrink-0" />
           <span className="truncate">{blockTitle(r)}</span>
-          <span className="ml-auto shrink-0 text-[10px] font-normal text-white/75">
-            {minToLabel(r.start)}
-          </span>
         </div>
-        <div className="text-[10px] text-white/60">予約不可</div>
+        <div className="mt-auto text-[10px] text-white/70">予約不可 ・ {minToLabel(r.start)}</div>
         {resizeHandle}
       </div>
     );
@@ -111,6 +104,33 @@ export function ReservationBlock({
   const inService = r.status === "ARRIVED" || r.status === "DONE";
   const unpaid = inService && !r.paid;
   const noChart = inService && !r.hasChart;
+  const isNew = isNewCustomer(customer);
+  const canceled = r.status === "CANCELED";
+  const palette = MENU_COLOR[reservationColor(r)];
+
+  // --- キャンセル: 履歴として残す(半透明・グレー・取り消し線) ---
+  if (canceled) {
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onPointerDown={onBodyPointerDown}
+        onClick={(e) => e.stopPropagation()}
+        style={{ left, width }}
+        className={cn(
+          "group absolute top-1 bottom-1 cursor-pointer overflow-hidden rounded-md border border-dashed border-slate-300 bg-slate-100/70 px-2 py-1 text-left opacity-60 transition-shadow hover:opacity-80",
+          highlight && "z-30 ring-2 ring-accent"
+        )}
+      >
+        <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 line-through">
+          <span className="truncate">{customer?.name ?? "(顧客未設定)"}</span>
+        </div>
+        <div className="mt-auto truncate text-[10px] text-slate-400">
+          {minToLabel(r.start)} ・ {r.cancelType ? CANCEL_TYPE_LABEL[r.cancelType] : "キャンセル"}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -119,19 +139,48 @@ export function ReservationBlock({
       onPointerDown={onBodyPointerDown}
       onClick={(e) => e.stopPropagation()}
       style={{ left, width, borderLeftColor: staff?.color }}
-      className={cn(sharedClass, STATUS_STYLE[r.status])}
+      className={cn(
+        sharedClass,
+        "flex flex-col border-border",
+        palette.tint,
+        r.status === "ARRIVED" && "ring-1 ring-primary/50",
+        r.status === "DONE" && "ring-1 ring-emerald-300",
+        isNew && "ring-2 ring-rose-300"
+      )}
     >
-      <div className="flex items-center gap-1 text-[11px] font-semibold text-foreground">
-        {r.isNominated && <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" />}
-        <span className="truncate">{customer?.name ?? "(顧客未設定)"}</span>
-        <span className="ml-auto shrink-0 text-[10px] font-normal text-muted-foreground">
-          {minToLabel(r.start)}
+      {isNew && (
+        <span className="absolute right-0 top-0 z-10 rounded-bl-md bg-rose-500 px-1 py-px text-[8px] font-bold leading-none text-white shadow-sm">
+          NEW
         </span>
+      )}
+
+      {/* 上段: 顧客名 (全文表示・最優先) */}
+      <div className="flex items-start gap-1 pr-5 text-[11px] font-semibold leading-tight text-foreground">
+        {r.isNominated && <Star className="mt-px h-3 w-3 shrink-0 fill-amber-400 text-amber-400" />}
+        <span className="break-words">{customer?.name ?? "(顧客未設定)"}</span>
       </div>
 
-      <div className="truncate text-[10px] text-muted-foreground">{menuNames(r.menuIds)}</div>
+      {/* 中段: コース名 (必要なら省略) */}
+      <div className="flex items-center gap-1 truncate text-[10px] text-muted-foreground">
+        <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", palette.dot)} aria-hidden />
+        <span className="truncate">{menuNames(r.menuIds)}</span>
+      </div>
 
-      <div className="mt-0.5 flex flex-wrap items-center gap-1">
+      {/* 下段: 開始時間・タグ */}
+      <div className="mt-auto flex flex-wrap items-center gap-1">
+        <span className="text-[10px] font-medium tabular-nums text-foreground/70">
+          {minToLabel(r.start)}
+        </span>
+        {r.status === "ARRIVED" && (
+          <span className="rounded bg-primary/12 px-1 py-px text-[9px] font-medium text-primary">
+            来店中
+          </span>
+        )}
+        {r.status === "DONE" && (
+          <span className="rounded bg-emerald-100 px-1 py-px text-[9px] font-medium text-emerald-700">
+            完了
+          </span>
+        )}
         {customer?.tags.slice(0, 1).map((t) => (
           <span
             key={t}

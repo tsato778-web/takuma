@@ -70,14 +70,17 @@ export function ReservationBoard() {
   const slotPx = slot * pxPerMin;
   const dk = dateKey(date);
 
+  // キャンセルも履歴として台帳に表示する (顧客予約画面側では空き扱い = occupiesSlot)
   const dayReservations = React.useMemo(
-    () => reservations.filter((r) => r.dateKey === dk && r.status !== "CANCELED"),
+    () => reservations.filter((r) => r.dateKey === dk),
     [reservations, dk]
   );
 
-  // ---- サマリ ----
+  // ---- サマリ (キャンセルは予約数に含めない) ----
   const summary = React.useMemo(() => {
-    const reservations = dayReservations.filter((r) => r.kind === "RESERVATION");
+    const reservations = dayReservations.filter(
+      (r) => r.kind === "RESERVATION" && r.status !== "CANCELED"
+    );
     const inService = reservations.filter(
       (r) => r.status === "ARRIVED" || r.status === "DONE"
     );
