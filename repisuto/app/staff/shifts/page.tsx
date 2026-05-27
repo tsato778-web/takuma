@@ -44,10 +44,28 @@ function Tag({ children }: { children: React.ReactNode }) {
   return <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground">{children}</span>;
 }
 
+const SHIFT_TIMES = (() => {
+  const a: string[] = [];
+  for (let h = 10; h <= 20; h++) {
+    a.push(`${String(h).padStart(2, "0")}:00`);
+    if (h < 20) a.push(`${String(h).padStart(2, "0")}:30`);
+  }
+  return a;
+})();
+function TimeSel({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} className="h-7 rounded-md border border-input bg-card px-1 text-xs tabular-nums">
+      {SHIFT_TIMES.map((t) => <option key={t}>{t}</option>)}
+    </select>
+  );
+}
+
 export default function ShiftsPage() {
   const [month, setMonth] = React.useState(new Date(2026, 4, 1));
-  const [ov, setOv] = React.useState<Record<string, S>>({});
-  const [menu, setMenu] = React.useState<{ key: string; staff: string; day: number; x: number; y: number } | null>(null);
+  const [ov, setOv] = React.useState<Record<string, { s: S; from?: string; to?: string }>>({});
+  const [menu, setMenu] = React.useState<{ key: string; staff: string; day: number; x: number; y: number; timed?: boolean } | null>(null);
+  const [tf, setTf] = React.useState("12:00");
+  const [tt, setTt] = React.useState("18:00");
   const y = month.getFullYear();
   const m = month.getMonth();
   const days = new Date(y, m + 1, 0).getDate();
@@ -109,11 +127,13 @@ export default function ShiftsPage() {
                 </td>
                 {list.map((d) => {
                   const key = `${si}-${d.getDate()}`;
-                  const st = ov[key] ?? statusFor(si, d);
+                  const cur = ov[key];
+                  const st = cur?.s ?? statusFor(si, d);
                   return (
                     <td key={d.getDate()} className="border-b border-border/40 p-0.5 text-center">
                       <button
                         onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ key, staff: s.name.split(" ")[0], day: d.getDate(), x: r.left, y: r.bottom }); }}
+                        title={st === "時" && cur?.from ? `時間指定 ${cur.from}-${cur.to}` : undefined}
                         className={cn("flex h-6 w-7 items-center justify-center rounded text-[10px] font-bold transition-transform hover:scale-110", STYLE[st])}
                       >
                         {st}
@@ -155,14 +175,38 @@ export default function ShiftsPage() {
       {menu && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setMenu(null)} />
-          <div className="fixed z-50 w-44 rounded-lg border border-border bg-card p-1 shadow-xl" style={{ left: menu.x, top: menu.y + 4 }}>
+          <div className="fixed z-50 w-52 rounded-lg border border-border bg-card p-1 shadow-xl" style={{ left: menu.x, top: menu.y + 4 }}>
             <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground">{menu.staff} ・ {month.getMonth() + 1}/{menu.day}</div>
-            {CELL_OPTS.map((o) => (
-              <button key={o.s} onClick={() => { setOv((p) => ({ ...p, [menu.key]: o.s })); setMenu(null); }} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-secondary">
-                <span className={cn("flex h-4 w-4 items-center justify-center rounded text-[9px] font-bold", STYLE[o.s])}>{o.s}</span>
-                {o.label}
-              </button>
-            ))}
+            {!menu.timed ? (
+              CELL_OPTS.map((o) => (
+                <button
+                  key={o.s}
+                  onClick={() => {
+                    if (o.s === "時") { setMenu((m) => (m ? { ...m, timed: true } : m)); return; }
+                    setOv((p) => ({ ...p, [menu.key]: { s: o.s } }));
+                    setMenu(null);
+                  }}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-secondary"
+                >
+                  <span className={cn("flex h-4 w-4 items-center justify-center rounded text-[9px] font-bold", STYLE[o.s])}>{o.s}</span>
+                  {o.label}
+                </button>
+              ))
+            ) : (
+              <div className="p-2">
+                <div className="mb-1.5 text-[11px] font-medium">時間指定出勤</div>
+                <div className="flex items-center gap-1">
+                  <TimeSel value={tf} onChange={setTf} />
+                  <span className="text-xs text-muted-foreground">〜</span>
+                  <TimeSel value={tt} onChange={setTt} />
+                </div>
+                <div className="mt-2 flex gap-1.5">
+                  <button onClick={() => setMenu((m) => (m ? { ...m, timed: false } : m))} className="flex-1 rounded-md border border-border py-1 text-[11px] hover:bg-secondary">戻る</button>
+                  <button onClick={() => { setOv((p) => ({ ...p, [menu.key]: { s: "時", from: tf, to: tt } })); setMenu(null); }} className="flex-1 rounded-md bg-primary py-1 text-[11px] font-semibold text-primary-foreground">設定</button>
+                </div>
+                <p className="mt-1.5 text-[10px] text-muted-foreground">この時間のみ予約受付可能（店舗営業時間より優先）</p>
+              </div>
+            )}
           </div>
         </>
       )}

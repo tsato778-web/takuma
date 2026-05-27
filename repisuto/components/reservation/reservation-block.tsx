@@ -24,10 +24,10 @@ import {
   ticketRemainingTotal,
   isNewCustomer,
   reservationColor,
-  serviceEndOf,
   MENU_COLOR,
   CANCEL_TYPE_LABEL,
   ROLE_LABEL,
+  type AssignRole,
   type BlockKind,
   type Reservation,
 } from "@/lib/mock-data";
@@ -52,6 +52,11 @@ interface Props {
   conflict?: boolean;
   conflictInfo?: string;
   staffWarn?: boolean;
+  // 担当セグメント描画用 (複数担当)
+  segStart?: number;
+  segEnd?: number;
+  segRole?: AssignRole; // 指定時は assignment セグメント
+  segLabel?: string;
   onBodyPointerDown: (e: React.PointerEvent) => void;
   onResizePointerDown: (e: React.PointerEvent) => void;
 }
@@ -64,13 +69,20 @@ export function ReservationBlock({
   conflict,
   conflictInfo,
   staffWarn,
+  segStart,
+  segEnd,
+  segRole,
+  segLabel,
   onBodyPointerDown,
   onResizePointerDown,
 }: Props) {
   const staff = staffById(r.staffId);
-  const left = (r.start - OPEN_MIN) * pxPerMin;
-  const width = (r.end - r.start) * pxPerMin;
-  const intervalPx = (r.intervalMin ?? 0) * pxPerMin;
+  const isFull = !segRole; // assignment未指定 = 通常(単独担当)ブロック
+  const start = segStart ?? r.start;
+  const end = segEnd ?? r.end;
+  const left = (start - OPEN_MIN) * pxPerMin;
+  const width = (end - start) * pxPerMin;
+  const intervalPx = isFull ? (r.intervalMin ?? 0) * pxPerMin : 0;
 
   const sharedClass = cn(
     "group absolute top-1 bottom-1 cursor-grab touch-none select-none overflow-hidden rounded-md border border-l-[3px] px-2 py-1 text-left shadow-sm transition-shadow hover:shadow-md hover:z-20 active:cursor-grabbing",
@@ -79,7 +91,7 @@ export function ReservationBlock({
     conflict && "z-20 border-rose-400 ring-2 ring-rose-400"
   );
 
-  const resizeHandle = (
+  const resizeHandle = isFull && (
     <div
       onPointerDown={(e) => {
         e.stopPropagation();
@@ -89,21 +101,18 @@ export function ReservationBlock({
     />
   );
 
-  // インターバル(準備時間)の帯。施術本体と見た目を分ける
   const intervalBand = intervalPx > 0 && (
     <div
       className="pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center justify-center border-l border-dashed border-black/20"
       style={{ width: intervalPx, backgroundColor: "rgba(255,255,255,0.5)", backgroundImage: HATCH_LIGHT }}
     >
       {intervalPx >= 30 && (
-        <span className="text-[8px] font-medium text-slate-500" style={{ writingMode: "vertical-rl" }}>
-          準備
-        </span>
+        <span className="text-[8px] font-medium text-slate-500" style={{ writingMode: "vertical-rl" }}>準備</span>
       )}
     </div>
   );
 
-  // ===== 予約以外(予約不可枠) = ダークアウト表示 =====
+  // ===== 予約以外(予約不可枠) =====
   if (r.kind !== "RESERVATION") {
     const Icon = BLOCK_ICON[r.kind];
     return (
@@ -126,17 +135,11 @@ export function ReservationBlock({
     );
   }
 
-  // ===== 予約 =====
   const customer = customerById(r.customerId ?? "");
-  const remaining = ticketRemainingTotal(customer);
-  const inService = r.status === "ARRIVED" || r.status === "DONE";
-  const unpaid = inService && !r.paid;
-  const noChart = inService && !r.hasChart;
-  const isNew = isNewCustomer(customer);
   const canceled = r.status === "CANCELED";
   const palette = MENU_COLOR[reservationColor(r)];
 
-  // --- キャンセル: 履歴として残す(半透明・グレー・取り消し線) ---
+  // --- キャンセル ---
   if (canceled) {
     return (
       <div
@@ -160,6 +163,41 @@ export function ReservationBlock({
     );
   }
 
+  // --- サブ/補助 担当セグメント (薄いブロック・予約不可を表す) ---
+  if (segRole === "SUB" || segRole === "ASSIST") {
+    const c = customer?.name ?? "顧客";
+    const isAssist = segRole === "ASSIST";
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        title={`${ROLE_LABEL[segRole]}：${c} / ${segLabel ?? ""} ${minToLabel(start)}-${minToLabel(end)}（この時間は予約不可）`}
+        onPointerDown={onBodyPointerDown}
+        onClick={(e) => e.stopPropagation()}
+        style={{ left, width, backgroundImage: HATCH_LIGHT }}
+        className={cn(
+          "group absolute top-1 bottom-1 cursor-pointer overflow-hidden rounded-md border border-dashed px-2 py-1 text-left transition-shadow hover:shadow-md",
+          isAssist ? "border-slate-400 bg-slate-200/70 text-slate-600" : "border-accent/50 bg-accent/10 text-accent",
+          highlight && "z-30 ring-2 ring-accent"
+        )}
+      >
+        <div className="flex items-center gap-1 text-[10px] font-semibold">
+          <span className="rounded bg-white/70 px-1 py-px text-[8px]">{ROLE_LABEL[segRole]}</span>
+          <span className="truncate">{c}</span>
+        </div>
+        <div className="mt-auto truncate text-[9px] opacity-80">{segLabel}・{minToLabel(start)}</div>
+      </div>
+    );
+  }
+
+  // ===== 通常 or 主担当(MAIN)セグメント =====
+  const remaining = ticketRemainingTotal(customer);
+  const inService = r.status === "ARRIVED" || r.status === "DONE";
+  const unpaid = inService && !r.paid;
+  const noChart = inService && !r.hasChart;
+  const isNew = isNewCustomer(customer);
+  const split = r.assignments && r.assignments.length > 1;
+
   return (
     <div
       role="button"
@@ -181,103 +219,46 @@ export function ReservationBlock({
       {intervalBand}
 
       {isNew && (
-        <span className="absolute right-0 top-0 z-20 rounded-bl-md bg-rose-500 px-1 py-px text-[8px] font-bold leading-none text-white shadow-sm">
-          NEW
-        </span>
+        <span className="absolute right-0 top-0 z-20 rounded-bl-md bg-rose-500 px-1 py-px text-[8px] font-bold leading-none text-white shadow-sm">NEW</span>
       )}
 
-      {/* 上段: 顧客名 (全文表示・最優先) */}
       <div className="flex items-start gap-1 pr-5 text-[11px] font-semibold leading-tight text-foreground">
         {r.isNominated && <Star className="mt-px h-3 w-3 shrink-0 fill-amber-400 text-amber-400" />}
         <span className="break-words">{customer?.name ?? "(顧客未設定)"}</span>
       </div>
 
-      {/* 中段: コース名 (必要なら省略) */}
       <div className="flex items-center gap-1 truncate text-[10px] text-muted-foreground">
         <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", palette.dot)} aria-hidden />
-        <span className="truncate">{menuNames(r.menuIds)}</span>
+        <span className="truncate">{segRole === "MAIN" && segLabel ? segLabel : menuNames(r.menuIds)}</span>
       </div>
 
-      {/* 担当分担タイムライン */}
-      {r.assignments && r.assignments.length > 1 && (
-        <div
-          className="relative mt-1 h-1.5 w-full rounded-full bg-secondary"
-          title={r.assignments.map((a) => `${ROLE_LABEL[a.role]} ${staffById(a.staffId)?.name.split(" ")[0]}：${a.label} ${minToLabel(a.start)}-${minToLabel(a.end)}`).join("\n")}
-        >
-          {r.assignments.map((a, i) => {
-            const span = r.end - r.start || 1;
-            return (
-              <div
-                key={i}
-                className="absolute top-0 h-1.5 rounded-full"
-                style={{ left: `${((a.start - r.start) / span) * 100}%`, width: `${((a.end - a.start) / span) * 100}%`, background: staffById(a.staffId)?.color, opacity: a.role === "ASSIST" ? 0.45 : 1 }}
-              />
-            );
-          })}
-        </div>
-      )}
-
-      {/* 下段: 開始時間・タグ */}
       <div className="mt-auto flex flex-wrap items-center gap-1">
-        <span className="text-[10px] font-medium tabular-nums text-foreground/70">
-          {minToLabel(r.start)}
-        </span>
-        {r.assignments && r.assignments.length > 1 && (
-          <span className="rounded bg-secondary px-1 py-px text-[9px] font-medium text-secondary-foreground">分担{r.assignments.length}名</span>
+        <span className="text-[10px] font-medium tabular-nums text-foreground/70">{minToLabel(start)}</span>
+        {split && (
+          <span className="rounded bg-secondary px-1 py-px text-[9px] font-medium text-secondary-foreground">分担{r.assignments!.length}名</span>
         )}
         {conflict && (
-          <span className="inline-flex items-center gap-0.5 rounded bg-rose-100 px-1 py-px text-[9px] font-bold text-rose-700">
-            <AlertTriangle className="h-2.5 w-2.5" />
-            重複
-          </span>
+          <span className="inline-flex items-center gap-0.5 rounded bg-rose-100 px-1 py-px text-[9px] font-bold text-rose-700"><AlertTriangle className="h-2.5 w-2.5" />重複</span>
         )}
         {staffWarn && (
-          <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 py-px text-[9px] font-bold text-amber-700">
-            <AlertTriangle className="h-2.5 w-2.5" />
-            担当不可
-          </span>
+          <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 py-px text-[9px] font-bold text-amber-700"><AlertTriangle className="h-2.5 w-2.5" />担当不可</span>
         )}
-        {r.status === "ARRIVED" && (
-          <span className="rounded bg-primary/12 px-1 py-px text-[9px] font-medium text-primary">
-            来店中
-          </span>
-        )}
-        {r.status === "DONE" && (
-          <span className="rounded bg-emerald-100 px-1 py-px text-[9px] font-medium text-emerald-700">
-            完了
-          </span>
-        )}
+        {r.status === "ARRIVED" && <span className="rounded bg-primary/12 px-1 py-px text-[9px] font-medium text-primary">来店中</span>}
+        {r.status === "DONE" && <span className="rounded bg-emerald-100 px-1 py-px text-[9px] font-medium text-emerald-700">完了</span>}
         {customer?.tags.slice(0, 1).map((t) => (
-          <span
-            key={t}
-            className="rounded bg-secondary px-1 py-px text-[9px] font-medium text-secondary-foreground"
-          >
-            {t}
-          </span>
+          <span key={t} className="rounded bg-secondary px-1 py-px text-[9px] font-medium text-secondary-foreground">{t}</span>
         ))}
         {remaining > 0 && (
-          <span className="inline-flex items-center gap-0.5 rounded bg-accent/12 px-1 py-px text-[9px] font-medium text-accent">
-            <TicketIcon className="h-2.5 w-2.5" />
-            残{remaining}
-          </span>
+          <span className="inline-flex items-center gap-0.5 rounded bg-accent/12 px-1 py-px text-[9px] font-medium text-accent"><TicketIcon className="h-2.5 w-2.5" />残{remaining}</span>
         )}
         {customer && !customer.lineLinked && (
-          <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 py-px text-[9px] font-medium text-amber-700">
-            <MessageCircleOff className="h-2.5 w-2.5" />
-            LINE未
-          </span>
+          <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 py-px text-[9px] font-medium text-amber-700"><MessageCircleOff className="h-2.5 w-2.5" />LINE未</span>
         )}
         {unpaid && (
-          <span className="inline-flex items-center gap-0.5 rounded bg-rose-100 px-1 py-px text-[9px] font-medium text-rose-700">
-            <Wallet className="h-2.5 w-2.5" />
-            未会計
-          </span>
+          <span className="inline-flex items-center gap-0.5 rounded bg-rose-100 px-1 py-px text-[9px] font-medium text-rose-700"><Wallet className="h-2.5 w-2.5" />未会計</span>
         )}
         {noChart && (
-          <span className="inline-flex items-center gap-0.5 rounded border border-border px-1 py-px text-[9px] font-medium text-muted-foreground">
-            <FileWarning className="h-2.5 w-2.5" />
-            未カルテ
-          </span>
+          <span className="inline-flex items-center gap-0.5 rounded border border-border px-1 py-px text-[9px] font-medium text-muted-foreground"><FileWarning className="h-2.5 w-2.5" />未カルテ</span>
         )}
       </div>
 

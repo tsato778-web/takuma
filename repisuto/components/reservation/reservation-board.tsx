@@ -38,9 +38,8 @@ import {
   occupiesSlot,
   blockTitle,
   customerById,
-  staffById,
   hasStaffMenuMismatch,
-  ROLE_LABEL,
+  type AssignRole,
   type Reservation,
 } from "@/lib/mock-data";
 
@@ -102,23 +101,36 @@ export function ReservationBoard() {
     };
   }, [dayReservations]);
 
-  // ---- 二重予約(重複)検出: 同一スタッフで占有時間が重なる枠 ----
+  // ---- 二重予約(重複)検出: スタッフ単位の担当ブロック時間で判定 ----
   const { conflictIds, conflictInfo } = React.useMemo(() => {
     const ids = new Set<string>();
     const info: Record<string, string> = {};
-    const active = dayReservations.filter(occupiesSlot);
-    const add = (id: string, other: Reservation) => {
-      const desc = `${blockTitle(other)} ${minToLabel(other.start)}–${minToLabel(other.end)}`;
-      info[id] = info[id] ? `${info[id]}\n${desc}` : `重複: ${desc}`;
-      ids.add(id);
+    type Seg = { rid: string; staffId: string; start: number; end: number };
+    const segs: Seg[] = [];
+    for (const r of dayReservations) {
+      if (!occupiesSlot(r)) continue;
+      if (r.assignments && r.assignments.length) {
+        for (const a of r.assignments) segs.push({ rid: r.id, staffId: a.staffId, start: a.start, end: a.end });
+      } else {
+        segs.push({ rid: r.id, staffId: r.staffId, start: r.start, end: r.end });
+      }
+    }
+    const titleOf = (rid: string) => {
+      const r = dayReservations.find((x) => x.id === rid);
+      return r ? blockTitle(r) : "";
     };
-    for (let i = 0; i < active.length; i++) {
-      for (let j = i + 1; j < active.length; j++) {
-        const a = active[i];
-        const b = active[j];
-        if (a.staffId === b.staffId && a.start < b.end && b.start < a.end) {
-          add(a.id, b);
-          add(b.id, a);
+    const add = (rid: string, other: Seg) => {
+      const desc = `${titleOf(other.rid)} ${minToLabel(other.start)}–${minToLabel(other.end)}`;
+      info[rid] = info[rid] ? `${info[rid]}\n${desc}` : `重複: ${desc}`;
+      ids.add(rid);
+    };
+    for (let i = 0; i < segs.length; i++) {
+      for (let j = i + 1; j < segs.length; j++) {
+        const a = segs[i];
+        const b = segs[j];
+        if (a.rid !== b.rid && a.staffId === b.staffId && a.start < b.end && b.start < a.end) {
+          add(a.rid, b);
+          add(b.rid, a);
         }
       }
     }
@@ -273,14 +285,21 @@ export function ReservationBoard() {
 
   const detailRes = detailId ? reservations.find((r) => r.id === detailId) ?? null : null;
 
-  function resolveForStaff(staffId: string) {
-    return dayReservations
-      .map((r) =>
-        preview && preview.id === r.id
-          ? { ...r, start: preview.start, end: preview.end, staffId: preview.staffId }
-          : r
-      )
-      .filter((r) => r.staffId === staffId);
+  // スタッフ行に描く担当セグメント (複数担当は担当ブロックごとに分割描画)
+  function segmentsForStaff(staffId: string) {
+    const out: { r: Reservation; segStart: number; segEnd: number; role?: AssignRole; label?: string }[] = [];
+    for (const base of dayReservations) {
+      const r =
+        preview && preview.id === base.id
+          ? { ...base, start: preview.start, end: preview.end, staffId: preview.staffId }
+          : base;
+      if (r.assignments && r.assignments.length) {
+        for (const a of r.assignments) if (a.staffId === staffId) out.push({ r, segStart: a.start, segEnd: a.end, role: a.role, label: a.label });
+      } else if (r.staffId === staffId) {
+        out.push({ r, segStart: r.start, segEnd: r.end });
+      }
+    }
+    return out;
   }
 
   return (
@@ -425,39 +444,28 @@ export function ReservationBoard() {
                 className="board-grid-bg relative border-b border-border"
                 style={{ width: totalWidth, ["--slot-px" as string]: `${slotPx}px` }}
               >
-                {resolveForStaff(s.id).map((r) => (
-                  <ReservationBlock
-                    key={r.id}
-                    reservation={r}
-                    pxPerMin={pxPerMin}
-                    dragging={preview?.id === r.id}
-                    highlight={highlightId === r.id}
-                    conflict={conflictIds.has(r.id)}
-                    conflictInfo={conflictInfo[r.id]}
-                    staffWarn={hasStaffMenuMismatch(r)}
-                    onBodyPointerDown={(e) => startDrag(e, r, "move")}
-                    onResizePointerDown={(e) => startDrag(e, r, "resize")}
-                  />
-                ))}
-                {/* 他予約のサブ/補助担当として入っている分担(ゴーストバー) */}
-                {dayReservations.flatMap((r) =>
-                  (r.assignments ?? [])
-                    .filter((a) => a.staffId === s.id && r.staffId !== s.id)
-                    .map((a, idx) => {
-                      const color = staffById(a.staffId)?.color ?? "#94a3b8";
-                      return (
-                        <button
-                          key={`${r.id}-g${idx}`}
-                          onClick={(e) => { e.stopPropagation(); setDetailId(r.id); }}
-                          title={`${ROLE_LABEL[a.role]}：${customerById(r.customerId ?? "")?.name ?? ""} / ${a.label} ${minToLabel(a.start)}-${minToLabel(a.end)}`}
-                          className="absolute bottom-1 z-10 flex items-center truncate rounded-md border border-dashed px-1.5 text-[9px] font-medium"
-                          style={{ left: (a.start - OPEN_MIN) * pxPerMin, width: (a.end - a.start) * pxPerMin, height: 16, borderColor: color, background: `${color}1f`, color, opacity: a.role === "ASSIST" ? 0.7 : 1 }}
-                        >
-                          {ROLE_LABEL[a.role]}・{a.label}
-                        </button>
-                      );
-                    })
-                )}
+                {segmentsForStaff(s.id).map((seg, i) => {
+                  const r = seg.r;
+                  const isFull = !seg.role;
+                  return (
+                    <ReservationBlock
+                      key={`${r.id}-${seg.role ?? "full"}-${i}`}
+                      reservation={r}
+                      pxPerMin={pxPerMin}
+                      dragging={isFull && preview?.id === r.id}
+                      highlight={highlightId === r.id}
+                      conflict={conflictIds.has(r.id) && seg.role !== "ASSIST"}
+                      conflictInfo={conflictInfo[r.id]}
+                      staffWarn={isFull && hasStaffMenuMismatch(r)}
+                      segStart={seg.segStart}
+                      segEnd={seg.segEnd}
+                      segRole={seg.role}
+                      segLabel={seg.label}
+                      onBodyPointerDown={(e) => (isFull ? startDrag(e, r, "move") : (e.stopPropagation(), setDetailId(r.id)))}
+                      onResizePointerDown={(e) => startDrag(e, r, "resize")}
+                    />
+                  );
+                })}
               </div>
             </div>
           ))}
