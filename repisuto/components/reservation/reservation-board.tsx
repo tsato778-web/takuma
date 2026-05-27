@@ -9,7 +9,9 @@ import { ReservationBlock } from "./reservation-block";
 import { NewReservationDialog } from "./new-reservation-dialog";
 import { ReservationDetailDialog } from "./reservation-detail-dialog";
 import { NotificationBell } from "@/components/notification-bell";
+import { DailyMemoBar } from "./daily-memo-bar";
 import { SEED_NOTIFICATIONS, type AppNotification } from "@/lib/notifications";
+import { SEED_MEMOS, type DailyMemo } from "@/lib/memos";
 import {
   OPEN_MIN,
   CLOSE_MIN,
@@ -29,6 +31,7 @@ import {
   STAFF,
   STORES,
   SEED_RESERVATIONS,
+  CURRENT_USER,
   dateKey,
   type Reservation,
 } from "@/lib/mock-data";
@@ -55,6 +58,7 @@ export function ReservationBoard() {
   const [detailId, setDetailId] = React.useState<string | null>(null);
   const [preview, setPreview] = React.useState<Preview | null>(null);
   const [notifications, setNotifications] = React.useState<AppNotification[]>(SEED_NOTIFICATIONS);
+  const [memos, setMemos] = React.useState<DailyMemo[]>(SEED_MEMOS);
   const [highlightId, setHighlightId] = React.useState<string | null>(null);
 
   const trackRef = React.useRef<HTMLDivElement>(null);
@@ -73,16 +77,39 @@ export function ReservationBoard() {
 
   // ---- サマリ ----
   const summary = React.useMemo(() => {
-    const inService = dayReservations.filter(
+    const reservations = dayReservations.filter((r) => r.kind === "RESERVATION");
+    const inService = reservations.filter(
       (r) => r.status === "ARRIVED" || r.status === "DONE"
     );
     return {
-      total: dayReservations.length,
+      total: reservations.length,
       visited: inService.length,
       unpaid: inService.filter((r) => !r.paid).length,
       noChart: inService.filter((r) => !r.hasChart).length,
     };
   }, [dayReservations]);
+
+  // ---- 日毎メモ (store_id + 日付 + 可視性で絞り込み) ----
+  const visibleMemos = React.useMemo(
+    () =>
+      memos.filter(
+        (m) =>
+          m.storeId === storeId &&
+          m.dateKey === dk &&
+          (m.scope === "STORE" || m.ownerId === CURRENT_USER.id)
+      ),
+    [memos, storeId, dk]
+  );
+
+  function saveMemo(memo: DailyMemo) {
+    setMemos((ms) => {
+      const exists = ms.some((m) => m.id === memo.id);
+      return exists ? ms.map((m) => (m.id === memo.id ? memo : m)) : [...ms, memo];
+    });
+  }
+  function deleteMemo(id: string) {
+    setMemos((ms) => ms.filter((m) => m.id !== id));
+  }
 
   // ---- 位置 <-> 時間 ----
   function pointerToMin(clientX: number): number {
@@ -299,6 +326,9 @@ export function ReservationBoard() {
           </Button>
         </div>
       </div>
+
+      {/* ===== 日毎メモ ===== */}
+      <DailyMemoBar memos={visibleMemos} dateKey={dk} onSave={saveMemo} onDelete={deleteMemo} />
 
       {/* ===== 台帳 (横軸=時間 / 縦軸=スタッフ) ===== */}
       <div

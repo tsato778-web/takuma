@@ -8,8 +8,8 @@ import {
   Wallet,
   FileWarning,
   LogIn,
-  Check,
   Trash2,
+  Ban,
 } from "lucide-react";
 
 import {
@@ -22,10 +22,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { minToLabel } from "@/lib/time";
 import {
+  blockTitle,
   customerById,
   staffById,
   menuNames,
   ticketRemainingTotal,
+  BLOCK_KIND_LABEL,
   type Reservation,
 } from "@/lib/mock-data";
 
@@ -45,14 +47,46 @@ interface Props {
 }
 
 export function ReservationDetailDialog({ reservation: r, onOpenChange, onUpdate, onDelete }: Props) {
-  const customer = r ? customerById(r.customerId) : undefined;
+  const isReservation = r?.kind === "RESERVATION";
+  const customer = r && isReservation ? customerById(r.customerId ?? "") : undefined;
   const staff = r ? staffById(r.staffId) : undefined;
   const inService = r?.status === "ARRIVED" || r?.status === "DONE";
 
   return (
     <Dialog open={!!r} onOpenChange={onOpenChange}>
       <DialogContent>
-        {r && (
+        {r && !isReservation && (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Ban className="h-4 w-4 text-slate-500" />
+                {blockTitle(r)}
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                  予約不可枠
+                </span>
+              </DialogTitle>
+              <DialogDescription>
+                {minToLabel(r.start)} 〜 {minToLabel(r.end)}　担当 {staff?.name}（種別：
+                {r.kind === "RESERVATION" ? "" : BLOCK_KIND_LABEL[r.kind]}）
+              </DialogDescription>
+            </DialogHeader>
+            <p className="text-[11px] text-muted-foreground">
+              台帳上でドラッグ移動・端のドラッグで時間変更ができます。
+            </p>
+            <div className="pt-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => onDelete(r.id)}
+              >
+                <Trash2 className="h-4 w-4" /> この枠を削除
+              </Button>
+            </div>
+          </>
+        )}
+
+        {r && isReservation && (
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">

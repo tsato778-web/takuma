@@ -49,13 +49,18 @@ export interface Menu {
   price: number;
 }
 
+// 枠の種別。RESERVATION のみ顧客を伴う。他は「予約不可枠」(ダークアウト表示)
+export type BlockKind = "RESERVATION" | "BREAK" | "MEETING" | "BLOCK" | "OTHER";
+
 export interface Reservation {
   id: string;
   storeId: string;
   dateKey: string; // YYYY-MM-DD
-  customerId: string;
+  kind: BlockKind;
+  customerId?: string; // RESERVATION のみ
   staffId: string;
   menuIds: string[];
+  label?: string; // 予約以外の表示ラベル(その他/メモ)
   start: number; // 0時からの分
   end: number;
   status: ReservationStatus;
@@ -64,6 +69,13 @@ export interface Reservation {
   paid: boolean; // 会計済みか (未会計表示用)
   hasChart: boolean; // カルテ記入済みか (未カルテ表示用)
 }
+
+export const BLOCK_KIND_LABEL: Record<Exclude<BlockKind, "RESERVATION">, string> = {
+  BREAK: "休憩",
+  MEETING: "MTG",
+  BLOCK: "BLOCK",
+  OTHER: "その他",
+};
 
 export const STORE: Store = { id: "store_shibuya", name: "渋谷店" };
 export const STORES: Store[] = [
@@ -112,15 +124,31 @@ export function dateKey(d: Date): string {
 // 「今日」基準でシード予約を生成 (起動時にその日のデータが見える)
 function buildSeed(): Reservation[] {
   const today = dateKey(new Date());
+  const R = (o: Partial<Reservation> & Pick<Reservation, "id" | "staffId" | "start" | "end">): Reservation => ({
+    storeId: STORE.id,
+    dateKey: today,
+    kind: "RESERVATION",
+    menuIds: [],
+    status: "CONFIRMED",
+    source: "MANUAL",
+    isNominated: false,
+    paid: false,
+    hasChart: false,
+    ...o,
+  });
   return [
-    { id: "r1", storeId: STORE.id, dateKey: today, customerId: "cus_yamada", staffId: "stf_tanaka", menuIds: ["menu_cut", "menu_color"], start: 10 * 60, end: 10 * 60 + 150, status: "ARRIVED", source: "LINE", isNominated: true, paid: false, hasChart: false },
-    { id: "r2", storeId: STORE.id, dateKey: today, customerId: "cus_takahashi", staffId: "stf_sato", menuIds: ["menu_cut"], start: 10 * 60 + 30, end: 10 * 60 + 90, status: "CONFIRMED", source: "PHONE", isNominated: false, paid: false, hasChart: false },
-    { id: "r3", storeId: STORE.id, dateKey: today, customerId: "cus_ito", staffId: "stf_suzuki", menuIds: ["menu_face"], start: 12 * 60 + 30, end: 13 * 60 + 30, status: "CONFIRMED", source: "WALK_IN", isNominated: false, paid: false, hasChart: false },
-    { id: "r4", storeId: STORE.id, dateKey: today, customerId: "cus_nakamura", staffId: "stf_tanaka", menuIds: ["menu_spa"], start: 13 * 60, end: 13 * 60 + 45, status: "DONE", source: "LINE", isNominated: false, paid: false, hasChart: true },
-    { id: "r5", storeId: STORE.id, dateKey: today, customerId: "cus_kobayashi", staffId: "stf_takahashi", menuIds: ["menu_treat"], start: 11 * 60, end: 11 * 60 + 30, status: "DONE", source: "MANUAL", isNominated: false, paid: true, hasChart: true },
-    { id: "r6", storeId: STORE.id, dateKey: today, customerId: "cus_kato", staffId: "stf_suzuki", menuIds: ["menu_perm"], start: 14 * 60 + 30, end: 16 * 60 + 30, status: "CONFIRMED", source: "LINE", isNominated: true, paid: false, hasChart: false },
-    { id: "r7", storeId: STORE.id, dateKey: today, customerId: "cus_saito", staffId: "stf_sato", menuIds: ["menu_color"], start: 15 * 60, end: 16 * 60 + 30, status: "CONFIRMED", source: "PHONE", isNominated: false, paid: false, hasChart: false },
-    { id: "r8", storeId: STORE.id, dateKey: today, customerId: "cus_watanabe", staffId: "stf_tanaka", menuIds: ["menu_face"], start: 16 * 60, end: 17 * 60, status: "CONFIRMED", source: "WALK_IN", isNominated: false, paid: false, hasChart: false },
+    R({ id: "r1", customerId: "cus_yamada", staffId: "stf_tanaka", menuIds: ["menu_cut", "menu_color"], start: 10 * 60, end: 10 * 60 + 150, status: "ARRIVED", source: "LINE", isNominated: true }),
+    R({ id: "r2", customerId: "cus_takahashi", staffId: "stf_sato", menuIds: ["menu_cut"], start: 10 * 60 + 30, end: 10 * 60 + 90, source: "PHONE" }),
+    R({ id: "r3", customerId: "cus_ito", staffId: "stf_suzuki", menuIds: ["menu_face"], start: 12 * 60 + 30, end: 13 * 60 + 30, source: "WALK_IN" }),
+    R({ id: "r4", customerId: "cus_nakamura", staffId: "stf_tanaka", menuIds: ["menu_spa"], start: 13 * 60, end: 13 * 60 + 45, status: "DONE", source: "LINE", hasChart: true }),
+    R({ id: "r5", customerId: "cus_kobayashi", staffId: "stf_takahashi", menuIds: ["menu_treat"], start: 11 * 60, end: 11 * 60 + 30, status: "DONE", paid: true, hasChart: true }),
+    R({ id: "r6", customerId: "cus_kato", staffId: "stf_suzuki", menuIds: ["menu_perm"], start: 14 * 60 + 30, end: 16 * 60 + 30, source: "LINE", isNominated: true }),
+    R({ id: "r7", customerId: "cus_saito", staffId: "stf_sato", menuIds: ["menu_color"], start: 15 * 60, end: 16 * 60 + 30, source: "PHONE" }),
+    R({ id: "r8", customerId: "cus_watanabe", staffId: "stf_tanaka", menuIds: ["menu_face"], start: 16 * 60, end: 17 * 60, source: "WALK_IN" }),
+    // 予約不可枠(ダークアウト)のサンプル
+    R({ id: "b1", kind: "BREAK", staffId: "stf_sato", start: 12 * 60, end: 13 * 60 }),
+    R({ id: "b2", kind: "MEETING", staffId: "stf_suzuki", start: 18 * 60, end: 18 * 60 + 30 }),
+    R({ id: "b3", kind: "BLOCK", staffId: "stf_takahashi", start: 16 * 60, end: 18 * 60 }),
   ];
 }
 
@@ -137,4 +165,14 @@ export function menuNames(ids: string[]): string {
 export function ticketRemainingTotal(c: Customer | undefined): number {
   if (!c) return 0;
   return c.tickets.reduce((s, t) => s + t.remaining, 0);
+}
+
+// ログイン中ユーザー(個人メモの所有者判定などに使用)
+export const CURRENT_USER = { id: "user_sasaki", name: "佐々木", role: "MANAGER" as const };
+
+// 枠のタイトル表示(予約は顧客名、それ以外は種別ラベル/カスタムラベル)
+export function blockTitle(r: Reservation): string {
+  if (r.kind === "RESERVATION") return customerById(r.customerId ?? "")?.name ?? "(顧客未設定)";
+  if (r.kind === "OTHER") return r.label?.trim() || BLOCK_KIND_LABEL.OTHER;
+  return BLOCK_KIND_LABEL[r.kind];
 }
