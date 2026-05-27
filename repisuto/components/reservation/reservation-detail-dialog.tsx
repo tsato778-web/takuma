@@ -54,9 +54,10 @@ interface Props {
   onUpdate: (id: string, patch: Partial<Reservation>) => void;
   onDelete: (id: string) => void;
   onOpenCustomer?: (customerId: string) => void;
+  onCheckout?: (id: string) => void;
 }
 
-export function ReservationDetailDialog({ reservation: r, onOpenChange, onUpdate, onDelete, onOpenCustomer }: Props) {
+export function ReservationDetailDialog({ reservation: r, onOpenChange, onUpdate, onDelete, onOpenCustomer, onCheckout }: Props) {
   const isReservation = r?.kind === "RESERVATION";
   const customer = r && isReservation ? customerById(r.customerId ?? "") : undefined;
   const staff = r ? staffById(r.staffId) : undefined;
@@ -186,7 +187,7 @@ export function ReservationDetailDialog({ reservation: r, onOpenChange, onUpdate
                 <Button
                   className="w-full"
                   disabled={r.paid}
-                  onClick={() => onUpdate(r.id, { status: "DONE", paid: true })}
+                  onClick={() => (onCheckout ? onCheckout(r.id) : onUpdate(r.id, { status: "DONE", paid: true }))}
                 >
                   <Wallet className="h-4 w-4" />
                   {r.paid ? "会計済み" : "会計する（自動で来店済に）"}

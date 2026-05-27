@@ -11,6 +11,7 @@ import { NewReservationDialog } from "./new-reservation-dialog";
 import { ReservationDetailDialog } from "./reservation-detail-dialog";
 import { NotificationBell } from "@/components/notification-bell";
 import { CustomerDrawer } from "@/components/customer/customer-drawer";
+import { CheckoutDialog } from "@/components/pos/checkout-dialog";
 import { DailyMemoBar } from "./daily-memo-bar";
 import { SEED_NOTIFICATIONS, type AppNotification } from "@/lib/notifications";
 import { SEED_MEMOS, type DailyMemo } from "@/lib/memos";
@@ -61,6 +62,7 @@ export function ReservationBoard() {
   const [prefill, setPrefill] = React.useState<{ staffId: string; start: number } | null>(null);
   const [detailId, setDetailId] = React.useState<string | null>(null);
   const [drawerCustomerId, setDrawerCustomerId] = React.useState<string | null>(null);
+  const [checkoutId, setCheckoutId] = React.useState<string | null>(null);
   const [preview, setPreview] = React.useState<Preview | null>(null);
   const [notifications, setNotifications] = React.useState<AppNotification[]>(SEED_NOTIFICATIONS);
   const [memos, setMemos] = React.useState<DailyMemo[]>(SEED_MEMOS);
@@ -456,10 +458,19 @@ export function ReservationBoard() {
           setDetailId(null);
           setDrawerCustomerId(id);
         }}
+        onCheckout={(id) => {
+          setDetailId(null);
+          setCheckoutId(id);
+        }}
       />
       <CustomerDrawer
         customer={drawerCustomerId ? customerById(drawerCustomerId) ?? null : null}
         onOpenChange={(o) => !o && setDrawerCustomerId(null)}
+      />
+      <CheckoutDialog
+        reservation={checkoutId ? reservations.find((r) => r.id === checkoutId) ?? null : null}
+        onOpenChange={(o) => !o && setCheckoutId(null)}
+        onComplete={(id) => updateRes(id, { status: "DONE", paid: true })}
       />
     </div>
   );
