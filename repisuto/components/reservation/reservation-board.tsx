@@ -38,7 +38,9 @@ import {
   occupiesSlot,
   blockTitle,
   customerById,
+  staffById,
   hasStaffMenuMismatch,
+  ROLE_LABEL,
   type Reservation,
 } from "@/lib/mock-data";
 
@@ -437,6 +439,25 @@ export function ReservationBoard() {
                     onResizePointerDown={(e) => startDrag(e, r, "resize")}
                   />
                 ))}
+                {/* 他予約のサブ/補助担当として入っている分担(ゴーストバー) */}
+                {dayReservations.flatMap((r) =>
+                  (r.assignments ?? [])
+                    .filter((a) => a.staffId === s.id && r.staffId !== s.id)
+                    .map((a, idx) => {
+                      const color = staffById(a.staffId)?.color ?? "#94a3b8";
+                      return (
+                        <button
+                          key={`${r.id}-g${idx}`}
+                          onClick={(e) => { e.stopPropagation(); setDetailId(r.id); }}
+                          title={`${ROLE_LABEL[a.role]}：${customerById(r.customerId ?? "")?.name ?? ""} / ${a.label} ${minToLabel(a.start)}-${minToLabel(a.end)}`}
+                          className="absolute bottom-1 z-10 flex items-center truncate rounded-md border border-dashed px-1.5 text-[9px] font-medium"
+                          style={{ left: (a.start - OPEN_MIN) * pxPerMin, width: (a.end - a.start) * pxPerMin, height: 16, borderColor: color, background: `${color}1f`, color, opacity: a.role === "ASSIST" ? 0.7 : 1 }}
+                        >
+                          {ROLE_LABEL[a.role]}・{a.label}
+                        </button>
+                      );
+                    })
+                )}
               </div>
             </div>
           ))}

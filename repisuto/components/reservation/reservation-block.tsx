@@ -27,6 +27,7 @@ import {
   serviceEndOf,
   MENU_COLOR,
   CANCEL_TYPE_LABEL,
+  ROLE_LABEL,
   type BlockKind,
   type Reservation,
 } from "@/lib/mock-data";
@@ -197,11 +198,33 @@ export function ReservationBlock({
         <span className="truncate">{menuNames(r.menuIds)}</span>
       </div>
 
+      {/* 担当分担タイムライン */}
+      {r.assignments && r.assignments.length > 1 && (
+        <div
+          className="relative mt-1 h-1.5 w-full rounded-full bg-secondary"
+          title={r.assignments.map((a) => `${ROLE_LABEL[a.role]} ${staffById(a.staffId)?.name.split(" ")[0]}：${a.label} ${minToLabel(a.start)}-${minToLabel(a.end)}`).join("\n")}
+        >
+          {r.assignments.map((a, i) => {
+            const span = r.end - r.start || 1;
+            return (
+              <div
+                key={i}
+                className="absolute top-0 h-1.5 rounded-full"
+                style={{ left: `${((a.start - r.start) / span) * 100}%`, width: `${((a.end - a.start) / span) * 100}%`, background: staffById(a.staffId)?.color, opacity: a.role === "ASSIST" ? 0.45 : 1 }}
+              />
+            );
+          })}
+        </div>
+      )}
+
       {/* 下段: 開始時間・タグ */}
       <div className="mt-auto flex flex-wrap items-center gap-1">
         <span className="text-[10px] font-medium tabular-nums text-foreground/70">
           {minToLabel(r.start)}
         </span>
+        {r.assignments && r.assignments.length > 1 && (
+          <span className="rounded bg-secondary px-1 py-px text-[9px] font-medium text-secondary-foreground">分担{r.assignments.length}名</span>
+        )}
         {conflict && (
           <span className="inline-flex items-center gap-0.5 rounded bg-rose-100 px-1 py-px text-[9px] font-bold text-rose-700">
             <AlertTriangle className="h-2.5 w-2.5" />

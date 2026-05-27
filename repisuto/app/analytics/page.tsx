@@ -125,6 +125,7 @@ function ManagerView({ txns, agg, axis, setAxis }: { txns: Txn[]; agg: ReturnTyp
   return (
     <>
       <ForecastSection />
+      <AdSimulator />
       <div className="mb-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi icon={TrendingUp} label="総売上（収受+消化）" value={yen(agg.total)} tone="primary" />
         <Kpi icon={Wallet} label="会計済み売上" value={yen(agg.collected)} sub={`消化ベース ${yen(agg.redeem)}`} />
@@ -448,6 +449,94 @@ function Fc({ label, v, accent }: { label: string; v: string; accent?: boolean }
       <div className="text-[10px] text-muted-foreground">{label}</div>
       <div className={cn("text-sm font-semibold tabular-nums", accent && "text-primary")}>{v}</div>
     </div>
+  );
+}
+
+// ===== Meta広告 予算シミュレーション =====
+function AdSimulator() {
+  const all = txnsInRange(MONTH.start, MONTH.end);
+  const actual = aggregate(all.filter((t) => t.date <= MONTH.today));
+  const totalForecast = Math.round((actual.total / MONTH.elapsed) * MONTH.total);
+  const shortfall = Math.max(0, TARGET_SALES - totalForecast);
+  const remainingDays = MONTH.total - MONTH.elapsed;
+
+  // 現状のMeta広告指標(モック)
+  const CUR = { spend: 120000, cpa: 3000, firstSpend: 50000, ticketRate: 0.4, ltv: 80000 };
+  const curCV = Math.round(CUR.spend / CUR.cpa);
+
+  // 推奨(不足額を初回単価で割って必要新規→広告費換算)
+  const recNew = Math.ceil(shortfall / CUR.firstSpend);
+  const recBudget = recNew * CUR.cpa;
+  const recDaily = remainingDays > 0 ? Math.ceil(recBudget / remainingDays) : recBudget;
+  const recSales = recNew * CUR.firstSpend;
+  const recRoas = recBudget > 0 ? Math.round((recSales / recBudget) * 100) : 0;
+
+  // 簡易シミュレーター
+  const [budget, setBudget] = React.useState(recBudget);
+  const [cpa, setCpa] = React.useState(CUR.cpa);
+  const [firstSpend, setFirstSpend] = React.useState(CUR.firstSpend);
+  const [ticketRate, setTicketRate] = React.useState(CUR.ticketRate * 100);
+  const [ltv, setLtv] = React.useState(CUR.ltv);
+
+  const simNew = cpa > 0 ? Math.floor(budget / cpa) : 0;
+  const simSales = simNew * firstSpend + Math.round(simNew * (ticketRate / 100) * 40000);
+  const simLanding = totalForecast + simSales;
+  const simRoas = budget > 0 ? Math.round((simSales / budget) * 100) : 0;
+  const simLtvSales = simNew * ltv;
+
+  return (
+    <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50/40 p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <span className="text-sm font-semibold">広告予算シミュレーション（Meta広告）</span>
+        <span className="text-[11px] text-muted-foreground">残り{remainingDays}日 ・ ホットペッパー等の固定費とは別に、日予算を調整できる前提</span>
+      </div>
+
+      {/* 現状 + 推奨 */}
+      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        <Fc label="目標まで不足" v={yen(shortfall)} />
+        <Fc label="現在のMeta広告費" v={yen(CUR.spend)} />
+        <Fc label="現在のCPA" v={yen(CUR.cpa)} />
+        <Fc label="現在のCV / 初回単価" v={`${curCV}件 / ${yen(CUR.firstSpend)}`} />
+        <Fc label="回数券購入率 / LTV" v={`${Math.round(CUR.ticketRate * 100)}% / ${yen(CUR.ltv)}`} />
+        <Fc label="推奨ROAS" v={`${recRoas}%`} accent />
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-sky-200 bg-card px-3 py-2 text-xs">
+        <span className="font-semibold text-sky-800">推奨：</span>
+        <span className="rounded-full bg-sky-50 px-2 py-0.5 font-medium">追加広告費 {yen(recBudget)}</span>
+        <span className="rounded-full bg-sky-50 px-2 py-0.5 font-medium">日予算 +{yen(recDaily)}/日</span>
+        <span className="rounded-full bg-sky-50 px-2 py-0.5 font-medium">想定新規 {recNew}名</span>
+        <span className="rounded-full bg-sky-50 px-2 py-0.5 font-medium">想定売上 {yen(recSales)}</span>
+      </div>
+
+      {/* 簡易シミュレーター */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_320px]">
+        <div className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-card p-3 sm:grid-cols-3">
+          <NumIn label="追加広告費(¥)" value={budget} onChange={setBudget} step={5000} />
+          <NumIn label="想定CPA(¥)" value={cpa} onChange={setCpa} step={500} />
+          <NumIn label="想定初回単価(¥)" value={firstSpend} onChange={setFirstSpend} step={5000} />
+          <NumIn label="想定回数券購入率(%)" value={ticketRate} onChange={setTicketRate} step={5} />
+          <NumIn label="想定LTV(¥)" value={ltv} onChange={setLtv} step={10000} />
+        </div>
+        <div className="rounded-lg border border-sky-200 bg-card p-3">
+          <div className="mb-2 text-xs font-semibold text-muted-foreground">シミュレーション結果</div>
+          <Row l="想定新規数" v={`${simNew}名`} />
+          <Row l="想定売上（今月）" v={yen(simSales)} bold />
+          <Row l="月末着地予測（補正後）" v={yen(simLanding)} />
+          <Row l="想定ROAS" v={`${simRoas}%`} />
+          <Row l="想定LTVベース売上" v={yen(simLtvSales)} />
+        </div>
+      </div>
+      <p className="mt-2 text-[11px] text-muted-foreground">※ モックの簡易計算（新規=広告費÷CPA、売上=新規×初回単価＋回数券）。本実装でMeta広告APIの実費・CV・媒体別流入と接続します。</p>
+    </div>
+  );
+}
+function NumIn({ label, value, onChange, step }: { label: string; value: number; onChange: (n: number) => void; step?: number }) {
+  return (
+    <label className="block">
+      <span className="text-[10px] text-muted-foreground">{label}</span>
+      <input type="number" step={step} value={value} onChange={(e) => onChange(Number(e.target.value) || 0)} className="mt-0.5 h-8 w-full rounded-md border border-input bg-card px-2 text-right text-sm tabular-nums" />
+    </label>
   );
 }
 

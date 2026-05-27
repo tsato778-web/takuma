@@ -7,18 +7,27 @@ import { cn } from "@/lib/utils";
 import { STAFF } from "@/lib/mock-data";
 import { PageShell } from "@/components/admin/page-shell";
 
-type S = "出" | "休" | "半" | "時";
+type S = "出" | "休" | "半" | "時" | "会";
 const STYLE: Record<S, string> = {
   出: "bg-emerald-100 text-emerald-700",
   休: "bg-secondary text-muted-foreground",
   半: "bg-amber-100 text-amber-700",
   時: "bg-sky-100 text-sky-700",
+  会: "bg-indigo-100 text-indigo-700",
 };
 const LEGEND: { s: S; label: string }[] = [
   { s: "出", label: "出勤" },
   { s: "休", label: "休み" },
   { s: "半", label: "半休" },
   { s: "時", label: "時間指定" },
+  { s: "会", label: "会議" },
+];
+const CELL_OPTS: { s: S; label: string }[] = [
+  { s: "出", label: "出勤" },
+  { s: "時", label: "時間指定出勤" },
+  { s: "半", label: "半休" },
+  { s: "休", label: "休日" },
+  { s: "会", label: "会議" },
 ];
 
 function statusFor(staffIdx: number, date: Date): S {
@@ -37,6 +46,8 @@ function Tag({ children }: { children: React.ReactNode }) {
 
 export default function ShiftsPage() {
   const [month, setMonth] = React.useState(new Date(2026, 4, 1));
+  const [ov, setOv] = React.useState<Record<string, S>>({});
+  const [menu, setMenu] = React.useState<{ key: string; staff: string; day: number; x: number; y: number } | null>(null);
   const y = month.getFullYear();
   const m = month.getMonth();
   const days = new Date(y, m + 1, 0).getDate();
@@ -97,10 +108,16 @@ export default function ShiftsPage() {
                   <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />{s.name.split(" ")[0]}</span>
                 </td>
                 {list.map((d) => {
-                  const st = statusFor(si, d);
+                  const key = `${si}-${d.getDate()}`;
+                  const st = ov[key] ?? statusFor(si, d);
                   return (
                     <td key={d.getDate()} className="border-b border-border/40 p-0.5 text-center">
-                      <span className={cn("flex h-6 w-7 items-center justify-center rounded text-[10px] font-bold", STYLE[st])}>{st}</span>
+                      <button
+                        onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ key, staff: s.name.split(" ")[0], day: d.getDate(), x: r.left, y: r.bottom }); }}
+                        className={cn("flex h-6 w-7 items-center justify-center rounded text-[10px] font-bold transition-transform hover:scale-110", STYLE[st])}
+                      >
+                        {st}
+                      </button>
                     </td>
                   );
                 })}
@@ -133,7 +150,22 @@ export default function ShiftsPage() {
         </div>
       </div>
 
-      <p className="mt-3 text-[11px] text-muted-foreground">※ モックUIです。出勤していないスタッフは予約受付不可、台帳の表示スタッフからも自動で外れます（スタッフ一括変更にも対応予定）。</p>
+      <p className="mt-3 text-[11px] text-muted-foreground">※ モックUIです。日付セルをクリックすると、その日だけ「時間指定/休日/会議」などに変更できます。出勤していないスタッフは予約受付不可、台帳の表示スタッフからも自動で外れます。</p>
+
+      {menu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setMenu(null)} />
+          <div className="fixed z-50 w-44 rounded-lg border border-border bg-card p-1 shadow-xl" style={{ left: menu.x, top: menu.y + 4 }}>
+            <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground">{menu.staff} ・ {month.getMonth() + 1}/{menu.day}</div>
+            {CELL_OPTS.map((o) => (
+              <button key={o.s} onClick={() => { setOv((p) => ({ ...p, [menu.key]: o.s })); setMenu(null); }} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-secondary">
+                <span className={cn("flex h-4 w-4 items-center justify-center rounded text-[9px] font-bold", STYLE[o.s])}>{o.s}</span>
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </PageShell>
   );
 }

@@ -124,6 +124,7 @@ export interface Reservation {
   isNominated: boolean;
   paid: boolean; // 会計済みか (未会計表示用)
   hasChart: boolean; // カルテ記入済みか (未カルテ表示用)
+  assignments?: Assignment[]; // 複数担当(担当分担)。未指定なら staffId 単独
 }
 
 export const BLOCK_KIND_LABEL: Record<Exclude<BlockKind, "RESERVATION">, string> = {
@@ -132,6 +133,18 @@ export const BLOCK_KIND_LABEL: Record<Exclude<BlockKind, "RESERVATION">, string>
   BLOCK: "BLOCK",
   OTHER: "その他",
 };
+
+// 複数担当(担当分担)。1予約に複数の担当ブロックを持てる。
+export type AssignRole = "MAIN" | "SUB" | "ASSIST";
+export const ROLE_LABEL: Record<AssignRole, string> = { MAIN: "主担当", SUB: "サブ担当", ASSIST: "補助" };
+export interface Assignment {
+  staffId: string;
+  role: AssignRole;
+  label: string; // 担当メニュー/役割
+  start: number; // 0時からの分
+  end: number;
+  share?: number; // 売上配分(0-1)。補助はnull/0
+}
 
 export const STORE: Store = { id: "store_shibuya", name: "渋谷店" };
 export const STORES: Store[] = [
@@ -194,7 +207,11 @@ function buildSeed(): Reservation[] {
     ...o,
   });
   return [
-    R({ id: "r1", customerId: "cus_yamada", staffId: "stf_tanaka", menuIds: ["menu_cut", "menu_color"], start: 10 * 60, end: 10 * 60 + 165, intervalMin: 15, status: "ARRIVED", source: "LINE", isNominated: true }),
+    R({ id: "r1", customerId: "cus_yamada", staffId: "stf_tanaka", menuIds: ["menu_cut", "menu_color"], start: 10 * 60, end: 10 * 60 + 165, intervalMin: 15, status: "ARRIVED", source: "LINE", isNominated: true, assignments: [
+      { staffId: "stf_tanaka", role: "MAIN", label: "カット", start: 10 * 60, end: 11 * 60, share: 0.4 },
+      { staffId: "stf_suzuki", role: "SUB", label: "カラー", start: 11 * 60, end: 12 * 60 + 30, share: 0.6 },
+      { staffId: "stf_takahashi", role: "ASSIST", label: "カラー補助", start: 11 * 60 + 30, end: 12 * 60 + 45 },
+    ] }),
     R({ id: "r2", customerId: "cus_takahashi", staffId: "stf_sato", menuIds: ["menu_cut"], start: 10 * 60 + 30, end: 10 * 60 + 90, source: "PHONE" }),
     R({ id: "r3", customerId: "cus_ito", staffId: "stf_suzuki", menuIds: ["menu_face"], start: 12 * 60 + 30, end: 13 * 60 + 40, intervalMin: 10, source: "WALK_IN" }),
     R({ id: "r4", customerId: "cus_nakamura", staffId: "stf_tanaka", menuIds: ["menu_spa"], start: 13 * 60, end: 13 * 60 + 55, intervalMin: 10, status: "DONE", source: "LINE", hasChart: true }),

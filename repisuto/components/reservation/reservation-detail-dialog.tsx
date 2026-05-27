@@ -34,6 +34,7 @@ import {
   isNewCustomer,
   BLOCK_KIND_LABEL,
   CANCEL_TYPE_LABEL,
+  ROLE_LABEL,
   type CancelType,
   type Reservation,
 } from "@/lib/mock-data";
@@ -155,6 +156,25 @@ export function ReservationDetailDialog({ reservation: r, onOpenChange, onUpdate
                 </span>
               )}
             </div>
+
+            {r.assignments && r.assignments.length > 1 && (
+              <div className="rounded-md border border-border p-2">
+                <div className="mb-1.5 text-[11px] font-medium text-muted-foreground">担当分担</div>
+                <div className="space-y-1">
+                  {r.assignments.map((a, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs">
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: staffById(a.staffId)?.color }} />
+                      <span className="w-16 shrink-0 tabular-nums text-muted-foreground">{minToLabel(a.start)}-{minToLabel(a.end)}</span>
+                      <span className="font-medium">{staffById(a.staffId)?.name}</span>
+                      <span className="text-muted-foreground">{a.label}</span>
+                      <span className={`ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-medium ${a.role === "MAIN" ? "bg-primary/10 text-primary" : a.role === "SUB" ? "bg-accent/12 text-accent" : "bg-secondary text-muted-foreground"}`}>
+                        {ROLE_LABEL[a.role]}{a.share ? ` ・売上${Math.round(a.share * 100)}%` : ""}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {r.customerId && onOpenCustomer && (
               <Button
