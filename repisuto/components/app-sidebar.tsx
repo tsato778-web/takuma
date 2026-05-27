@@ -42,6 +42,7 @@ const NAV: NavItem[] = [
     label: "LINE",
     icon: MessageCircle,
     children: [
+      { label: "自動トリガー", href: "/line/triggers" },
       { label: "状態別配信", href: "/line/state-delivery" },
       { label: "セグメント配信", href: "/line/segments" },
       { label: "シナリオ配信", href: "/line/scenarios" },
