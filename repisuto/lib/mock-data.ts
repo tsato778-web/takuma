@@ -41,6 +41,7 @@ export interface Staff {
   name: string;
   color: string; // 予約台帳の色 (hex)
   acceptsNomination: boolean;
+  menuIds: string[]; // 対応可能メニュー (空=全対応)
 }
 
 export interface Ticket {
@@ -140,10 +141,10 @@ export const STORES: Store[] = [
 ];
 
 export const STAFF: Staff[] = [
-  { id: "stf_tanaka", storeId: STORE.id, name: "田中 美咲", color: "#0ea5b7", acceptsNomination: true },
-  { id: "stf_sato", storeId: STORE.id, name: "佐藤 健", color: "#7c6df2", acceptsNomination: true },
-  { id: "stf_suzuki", storeId: STORE.id, name: "鈴木 葵", color: "#e8739a", acceptsNomination: true },
-  { id: "stf_takahashi", storeId: STORE.id, name: "高橋 涼", color: "#f0a13b", acceptsNomination: false },
+  { id: "stf_tanaka", storeId: STORE.id, name: "田中 美咲", color: "#0ea5b7", acceptsNomination: true, menuIds: ["menu_cut", "menu_color", "menu_perm", "menu_treat", "menu_spa", "menu_face"] },
+  { id: "stf_sato", storeId: STORE.id, name: "佐藤 健", color: "#7c6df2", acceptsNomination: true, menuIds: ["menu_cut", "menu_color", "menu_perm", "menu_treat"] },
+  { id: "stf_suzuki", storeId: STORE.id, name: "鈴木 葵", color: "#e8739a", acceptsNomination: true, menuIds: ["menu_cut", "menu_color", "menu_treat", "menu_spa", "menu_face"] },
+  { id: "stf_takahashi", storeId: STORE.id, name: "高橋 涼", color: "#f0a13b", acceptsNomination: false, menuIds: ["menu_cut", "menu_treat", "menu_spa"] },
 ];
 
 export const MENUS: Menu[] = [
@@ -217,6 +218,15 @@ export const SEED_RESERVATIONS: Reservation[] = buildSeed();
 export const customerById = (id: string) => CUSTOMERS.find((c) => c.id === id);
 export const staffById = (id: string) => STAFF.find((s) => s.id === id);
 export const menuById = (id: string) => MENUS.find((m) => m.id === id);
+
+// スタッフがそのメニューに対応できるか (menuIds 空 = 全対応)
+export const staffHandlesMenu = (staffId: string, menuId: string): boolean => {
+  const s = staffById(staffId);
+  return !s || s.menuIds.length === 0 || s.menuIds.includes(menuId);
+};
+// 予約のメニューに、担当スタッフが対応不可なものが含まれるか
+export const hasStaffMenuMismatch = (r: Reservation): boolean =>
+  r.kind === "RESERVATION" && r.menuIds.some((id) => !staffHandlesMenu(r.staffId, id));
 
 export function menuNames(ids: string[]): string {
   return ids.map((id) => menuById(id)?.name ?? "").filter(Boolean).join(" + ");

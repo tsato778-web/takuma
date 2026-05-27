@@ -18,6 +18,7 @@ import {
   CalendarRange,
   ClipboardList,
   MapPin,
+  Scissors,
   Plug,
   Wrench,
   Sparkles,
@@ -60,6 +61,7 @@ const NAV: NavItem[] = [
     ],
   },
   { label: "回答フォーム作成", icon: ClipboardList, href: "/forms" },
+  { label: "メニュー作成", icon: Scissors, href: "/menus" },
   { label: "Googleマップ", icon: MapPin, href: "/google-business" },
   {
     label: "基本マスター",

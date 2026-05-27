@@ -124,6 +124,7 @@ function ManagerView({ txns, agg, axis, setAxis }: { txns: Txn[]; agg: ReturnTyp
 
   return (
     <>
+      <ForecastSection />
       <div className="mb-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi icon={TrendingUp} label="総売上（収受+消化）" value={yen(agg.total)} tone="primary" />
         <Kpi icon={Wallet} label="会計済み売上" value={yen(agg.collected)} sub={`消化ベース ${yen(agg.redeem)}`} />
@@ -365,6 +366,87 @@ function NewRepeatView({ txns }: { txns: Txn[] }) {
           <Row l="リピート率" v={`${a.repeatRate}%`} bold />
         </Card>
       ))}
+    </div>
+  );
+}
+
+// ===== 月末着地予測（経営者向け） =====
+const MONTH = { start: "2026-05-01", end: "2026-05-31", today: "2026-05-27", elapsed: 27, total: 31 };
+const TARGET_SALES = 3_000_000; // 目標売上(モック・本来は店舗設定)
+
+function ForecastSection() {
+  const all = txnsInRange(MONTH.start, MONTH.end);
+  const upto = all.filter((t) => t.date <= MONTH.today);
+  const future = all.filter((t) => t.date > MONTH.today);
+  const actual = aggregate(upto);
+  const futureAgg = aggregate(future);
+  const proj = (v: number) => Math.round((v / MONTH.elapsed) * MONTH.total);
+
+  const totalForecast = proj(actual.total);
+  const redeemForecast = proj(actual.redeem);
+  const newActual = actual.visits - actual.repeatCount;
+  const newForecast = proj(newActual);
+  const newCollected = upto.filter((t) => t.isNew).reduce((s, t) => s + t.collected, 0);
+  const newAvg = newActual ? Math.round(newCollected / newActual) : 50000;
+
+  const achieve = Math.round((totalForecast / TARGET_SALES) * 100);
+  const shortfall = Math.max(0, TARGET_SALES - totalForecast);
+  const needNew = Math.ceil(shortfall / Math.max(1, newAvg));
+  const needTicket = Math.ceil(shortfall / 40000);
+  const needNext = Math.ceil(shortfall / Math.max(1, actual.avgSpend));
+
+  return (
+    <div className="mb-4 rounded-xl border border-primary/30 bg-gradient-to-br from-primary/5 to-accent/5 p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <span className="text-sm font-semibold">今月の着地予測（2026年5月）</span>
+        <span className="text-[11px] text-muted-foreground">{MONTH.today.slice(5).replace("-", "/")}時点 ・ 経過{MONTH.elapsed}/{MONTH.total}日</span>
+      </div>
+
+      {/* 目標 vs 着地 */}
+      <div className="mb-3 rounded-lg border border-border bg-card p-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <div><span className="text-[11px] text-muted-foreground">目標売上</span> <span className="font-semibold tabular-nums">{yen(TARGET_SALES)}</span></div>
+          <div><span className="text-[11px] text-muted-foreground">月末予測（総売上）</span> <span className="text-xl font-bold tabular-nums text-primary">{yen(totalForecast)}</span></div>
+          <div><span className="text-[11px] text-muted-foreground">達成率</span> <span className={cn("font-bold tabular-nums", achieve >= 100 ? "text-emerald-600" : "text-amber-600")}>{achieve}%</span></div>
+          <div><span className="text-[11px] text-muted-foreground">不足額</span> <span className="font-semibold tabular-nums text-rose-600">{shortfall > 0 ? yen(shortfall) : "達成見込み"}</span></div>
+        </div>
+        <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-secondary">
+          <div className={cn("h-full rounded-full", achieve >= 100 ? "bg-emerald-500" : "bg-primary")} style={{ width: `${Math.min(100, achieve)}%` }} />
+        </div>
+      </div>
+
+      {/* 予測内訳 */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+        <Fc label="総売上ベース 着地" v={yen(totalForecast)} accent />
+        <Fc label="消化売上ベース 着地" v={yen(redeemForecast)} />
+        <Fc label="会計済み売上（実績）" v={yen(actual.collected)} />
+        <Fc label="予約済み売上見込み" v={yen(futureAgg.collected)} />
+        <Fc label="回数券購入見込み" v={yen(proj(actual.ticketBuy))} />
+        <Fc label="回数券消化見込み" v={yen(redeemForecast)} />
+        <Fc label="新規数 着地予測" v={`${newForecast}名`} />
+        <Fc label="次回予約率 予測" v={`${actual.nextRate}%`} />
+        <Fc label="リピート率 予測" v={`${actual.repeatRate}%`} />
+        <Fc label="客単価 予測" v={yen(actual.avgSpend)} />
+      </div>
+
+      {/* 必要アクション */}
+      {shortfall > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs">
+          <span className="font-semibold text-amber-800">目標達成に必要なアクション（目安）：</span>
+          <span className="rounded-full bg-card px-2 py-0.5 font-medium">新規 あと{needNew}名</span>
+          <span className="rounded-full bg-card px-2 py-0.5 font-medium">回数券 あと{needTicket}件</span>
+          <span className="rounded-full bg-card px-2 py-0.5 font-medium">次回予約 あと{needNext}件</span>
+        </div>
+      )}
+      <p className="mt-2 text-[11px] text-muted-foreground">※ 実績ペース＋予約予定から算出（モック）。新規数×平均初回単価、リピート率からの再来見込みも本実装で接続します。</p>
+    </div>
+  );
+}
+function Fc({ label, v, accent }: { label: string; v: string; accent?: boolean }) {
+  return (
+    <div className="rounded-lg border border-border bg-card px-3 py-2">
+      <div className="text-[10px] text-muted-foreground">{label}</div>
+      <div className={cn("text-sm font-semibold tabular-nums", accent && "text-primary")}>{v}</div>
     </div>
   );
 }

@@ -50,6 +50,7 @@ interface Props {
   highlight?: boolean;
   conflict?: boolean;
   conflictInfo?: string;
+  staffWarn?: boolean;
   onBodyPointerDown: (e: React.PointerEvent) => void;
   onResizePointerDown: (e: React.PointerEvent) => void;
 }
@@ -61,6 +62,7 @@ export function ReservationBlock({
   highlight,
   conflict,
   conflictInfo,
+  staffWarn,
   onBodyPointerDown,
   onResizePointerDown,
 }: Props) {
@@ -171,7 +173,8 @@ export function ReservationBlock({
         palette.tint,
         !conflict && r.status === "ARRIVED" && "ring-1 ring-primary/50",
         !conflict && r.status === "DONE" && "ring-1 ring-emerald-300",
-        !conflict && isNew && "ring-2 ring-rose-300"
+        !conflict && isNew && "ring-2 ring-rose-300",
+        !conflict && staffWarn && "border-amber-400 ring-2 ring-amber-400"
       )}
     >
       {intervalBand}
@@ -203,6 +206,12 @@ export function ReservationBlock({
           <span className="inline-flex items-center gap-0.5 rounded bg-rose-100 px-1 py-px text-[9px] font-bold text-rose-700">
             <AlertTriangle className="h-2.5 w-2.5" />
             重複
+          </span>
+        )}
+        {staffWarn && (
+          <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 py-px text-[9px] font-bold text-amber-700">
+            <AlertTriangle className="h-2.5 w-2.5" />
+            担当不可
           </span>
         )}
         {r.status === "ARRIVED" && (

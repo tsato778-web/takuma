@@ -38,6 +38,7 @@ import {
   occupiesSlot,
   blockTitle,
   customerById,
+  hasStaffMenuMismatch,
   type Reservation,
 } from "@/lib/mock-data";
 
@@ -431,6 +432,7 @@ export function ReservationBoard() {
                     highlight={highlightId === r.id}
                     conflict={conflictIds.has(r.id)}
                     conflictInfo={conflictInfo[r.id]}
+                    staffWarn={hasStaffMenuMismatch(r)}
                     onBodyPointerDown={(e) => startDrag(e, r, "move")}
                     onResizePointerDown={(e) => startDrag(e, r, "resize")}
                   />

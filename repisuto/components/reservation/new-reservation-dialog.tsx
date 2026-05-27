@@ -24,6 +24,7 @@ import {
   INTERVAL_OPTIONS,
   menuById,
   staffById,
+  staffHandlesMenu,
   blockTitle,
   suggestedInterval,
   findConflicts,
@@ -194,14 +195,19 @@ export function NewReservationDialog({
                   <div className="flex flex-wrap gap-1.5">
                     {MENUS.map((m) => {
                       const on = menuIds.includes(m.id);
+                      const disabled = !staffHandlesMenu(staffId, m.id);
                       return (
                         <button
                           type="button"
                           key={m.id}
+                          disabled={disabled}
+                          title={disabled ? `${staffById(staffId)?.name.split(" ")[0]}は対応不可` : undefined}
                           onClick={() => toggleMenu(m.id)}
                           className={cn(
                             "rounded-full border px-3 py-1 text-xs transition-colors",
-                            on
+                            disabled
+                              ? "cursor-not-allowed border-dashed border-border bg-secondary/30 text-muted-foreground/50 line-through"
+                              : on
                               ? "border-primary bg-primary/10 text-primary"
                               : "border-border bg-card text-muted-foreground hover:bg-secondary"
                           )}
@@ -212,6 +218,7 @@ export function NewReservationDialog({
                       );
                     })}
                   </div>
+                  <p className="text-[10px] text-muted-foreground">担当が対応できないメニューは選択できません。</p>
                 </div>
               </>
             )}
@@ -235,7 +242,10 @@ export function NewReservationDialog({
                     <button
                       type="button"
                       key={s.id}
-                      onClick={() => setStaffId(s.id)}
+                      onClick={() => {
+                        setStaffId(s.id);
+                        setMenuIds((prev) => prev.filter((id) => staffHandlesMenu(s.id, id)));
+                      }}
                       className={cn(
                         "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
                         staffId === s.id
