@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarDays,
+  CalendarCheck,
   Users,
   FileText,
   Receipt,
@@ -33,6 +34,7 @@ type NavItem = { label: string; icon: typeof CalendarDays; href?: string; childr
 
 const NAV: NavItem[] = [
   { label: "予約台帳", icon: CalendarDays, href: "/reservations" },
+  { label: "お客様予約（◯×）", icon: CalendarCheck, href: "/booking" },
   { label: "顧客", icon: Users, href: "/customers" },
   { label: "カルテ", icon: FileText, href: "/records" },
   { label: "会計", icon: Receipt, href: "/pos" },

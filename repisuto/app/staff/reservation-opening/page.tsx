@@ -5,16 +5,13 @@ import { Check } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/admin/page-shell";
+import { OPENING_OPTIONS, CURRENT_OPENING_RULE } from "@/lib/shifts";
 
-const OPTIONS = [
-  { id: "days30", label: "30日先まで予約可能", desc: "常に当日から30日先までを開放" },
-  { id: "days60", label: "60日先まで予約可能", desc: "常に当日から60日先までを開放" },
-  { id: "monthly", label: "毎月1日に翌月分を開放", desc: "月初にまとめて翌月を開放" },
-  { id: "shift", label: "出勤表が登録された日のみ予約可能", desc: "シフト連動。未登録日は受付不可" },
-];
+// お客様予約画面（◯×）と同じ lib/shifts の開放設定を共有（設定がそのまま◯×判定に反映される）
+const OPTIONS = OPENING_OPTIONS;
 
 export default function ReservationOpeningPage() {
-  const [selected, setSelected] = React.useState("days30");
+  const [selected, setSelected] = React.useState<string>(CURRENT_OPENING_RULE);
   const [adminOverride, setAdminOverride] = React.useState(true);
 
   return (

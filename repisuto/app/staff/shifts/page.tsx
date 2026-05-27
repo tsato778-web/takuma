@@ -5,9 +5,11 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { STAFF } from "@/lib/mock-data";
+import { shiftCodeForIndex, type ShiftCode } from "@/lib/shifts";
 import { PageShell } from "@/components/admin/page-shell";
 
-type S = "出" | "休" | "半" | "時" | "会";
+// お客様予約画面（◯×）と同じ lib/shifts のシフトロジックを共有（表示が必ず一致する）
+type S = ShiftCode;
 const STYLE: Record<S, string> = {
   出: "bg-emerald-100 text-emerald-700",
   休: "bg-secondary text-muted-foreground",
@@ -29,16 +31,6 @@ const CELL_OPTS: { s: S; label: string }[] = [
   { s: "休", label: "休日" },
   { s: "会", label: "会議" },
 ];
-
-function statusFor(staffIdx: number, date: Date): S {
-  const dow = date.getDay();
-  const seed = (staffIdx * 31 + date.getDate() * 7) % 10;
-  if (dow === 0 && seed < 6) return "休";
-  if (seed === 0) return "休";
-  if (seed === 1) return "半";
-  if (seed === 2) return "時";
-  return "出";
-}
 
 function Tag({ children }: { children: React.ReactNode }) {
   return <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground">{children}</span>;
@@ -128,7 +120,7 @@ export default function ShiftsPage() {
                 {list.map((d) => {
                   const key = `${si}-${d.getDate()}`;
                   const cur = ov[key];
-                  const st = cur?.s ?? statusFor(si, d);
+                  const st = cur?.s ?? shiftCodeForIndex(si, d);
                   return (
                     <td key={d.getDate()} className="border-b border-border/40 p-0.5 text-center">
                       <button
