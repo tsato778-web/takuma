@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import {
-  Plus,
   X,
   Wallet,
   CheckCircle2,
@@ -13,6 +12,7 @@ import {
   Star,
   Sparkles,
   AlertTriangle,
+  Plus,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -25,12 +25,11 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { minToLabel } from "@/lib/time";
-import { customerById, staffById, ticketStatus, type Reservation } from "@/lib/mock-data";
+import { customerById, staffById, STAFF, type Customer, type Reservation } from "@/lib/mock-data";
 import { jpDate } from "@/lib/customer-data";
 import {
   PRODUCTS,
   OPTIONS,
-  COUPONS,
   TICKET_PLANS,
   MEMBERSHIP_PLANS,
   ENROLLMENT_FEE,
@@ -44,6 +43,7 @@ import {
   type LineItem,
   type LineKind,
   type PaymentMethod,
+  type Totals,
 } from "@/lib/pos";
 
 const LINE_TONE: Partial<Record<LineKind, string>> = {
@@ -52,6 +52,21 @@ const LINE_TONE: Partial<Record<LineKind, string>> = {
   referral: "text-rose-600",
   ticketUse: "text-rose-600",
 };
+
+interface PayRow {
+  id: string;
+  method: PaymentMethod;
+  amount: number;
+}
+interface CheckoutResult {
+  totals: Totals;
+  payments: PayRow[];
+  serviceStaff?: string;
+  cashierStaff?: string;
+  ticketSellStaff?: string;
+  ticketUseStaff?: string;
+  consumed: { name: string; count: number; remaining: number }[];
+}
 
 export function CheckoutDialog({
   reservation: r,
@@ -74,35 +89,92 @@ export function CheckoutDialog({
 function CheckoutBody({ reservation: r, onComplete, onClose }: { reservation: Reservation; onComplete: (id: string) => void; onClose: () => void }) {
   const customer = customerById(r.customerId ?? "");
   const staff = staffById(r.staffId);
+  const heldTickets = (customer?.tickets ?? []).filter((t) => t.remaining > 0);
+
   const [lines, setLines] = React.useState<LineItem[]>(() => initialLines(r));
-  const [split, setSplit] = React.useState(false);
-  const [method, setMethod] = React.useState<PaymentMethod>("クレジット");
-  const [splitPay, setSplitPay] = React.useState<Record<PaymentMethod, number>>({ 現金: 0, クレジット: 0, PayPay: 0, QR: 0 });
-  const [step, setStep] = React.useState<"edit" | "done">("edit");
+  const [payments, setPayments] = React.useState<PayRow[]>([]);
+  const [payMethod, setPayMethod] = React.useState<PaymentMethod>("現金");
+  const [payAmount, setPayAmount] = React.useState<string>("");
+  const [serviceStaffId, setServiceStaffId] = React.useState(r.staffId);
+  const [cashierStaffId, setCashierStaffId] = React.useState(r.staffId);
+  const [ticketSellStaffId, setTicketSellStaffId] = React.useState(r.staffId);
+  const [ticketUseStaffId, setTicketUseStaffId] = React.useState(r.staffId);
+  const [ticketId, setTicketId] = React.useState(heldTickets[0]?.id ?? "");
+  const [consumeCount, setConsumeCount] = React.useState(1);
+  const [discKind, setDiscKind] = React.useState<"amount" | "percent" | "coupon">("amount");
+  const [discValue, setDiscValue] = React.useState("");
+  const [result, setResult] = React.useState<CheckoutResult | null>(null);
 
   const totals = computeTotals(lines);
   const stayMin = r.end - r.start;
   const stay = `${Math.floor(stayMin / 60) > 0 ? `${Math.floor(stayMin / 60)}時間` : ""}${stayMin % 60}分`;
-  const posSum = Object.values(splitPay).reduce((s, n) => s + n, 0);
-  const remaining = totals.total - posSum;
-  const canConfirm = split ? remaining === 0 && totals.total > 0 : totals.total !== 0 || lines.length > 0;
+  const paidSum = payments.reduce((s, p) => s + p.amount, 0);
+  const shortage = totals.total - paidSum; // >0:不足  <0:お釣り
+  const hasTicketBuy = lines.some((l) => l.kind === "ticketBuy");
+  const hasTicketUse = lines.some((l) => l.kind === "ticketUse");
+  const canConfirm = totals.total === 0 ? true : paidSum >= totals.total;
 
-  function addLine(kind: LineKind, name: string, amount: number) {
-    setLines((ls) => [...ls, { id: `${kind}-${Date.now()}`, kind, name, amount }]);
+  function addLine(p: Partial<LineItem> & Pick<LineItem, "kind" | "name" | "amount">) {
+    setLines((ls) => [...ls, { id: `${p.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, ...p }]);
   }
-  function removeLine(id: string) {
-    setLines((ls) => ls.filter((l) => l.id !== id));
-  }
-  function addCoupon(id: string) {
-    const c = COUPONS.find((x) => x.id === id);
-    if (!c) return;
-    const base = lines.filter((l) => l.amount > 0).reduce((s, l) => s + l.amount, 0);
-    const amt = c.kind === "percent" ? -Math.round((base * c.value) / 100) : -c.value;
-    addLine("coupon", c.name, amt);
+  const removeLine = (id: string) => setLines((ls) => ls.filter((l) => l.id !== id));
+
+  function consumeTicket() {
+    const t = heldTickets.find((x) => x.id === ticketId);
+    if (!t) return;
+    const covered = lines.find((l) => l.kind === "menu" && t.menus && l.name.includes(t.menus)) ?? lines.find((l) => l.kind === "menu");
+    const offset = covered ? -covered.amount : -(t.unitPrice * consumeCount);
+    addLine({
+      kind: "ticketUse",
+      name: `${t.name} 消化 ${consumeCount}回`,
+      amount: offset,
+      count: consumeCount,
+      redeemValue: t.unitPrice * consumeCount,
+      ticketId: t.id,
+    });
   }
 
-  if (step === "done") {
-    return <DoneView reservation={r} total={totals.total} method={split ? "複合支払い" : method} onClose={onClose} />;
+  function addDiscount() {
+    const v = Number(discValue) || 0;
+    if (discKind === "percent") {
+      const base = lines.filter((l) => l.amount > 0).reduce((s, l) => s + l.amount, 0);
+      if (v > 0) addLine({ kind: "coupon", name: `${v}%割引`, amount: -Math.round((base * v) / 100) });
+    } else if (discKind === "coupon") {
+      if (v > 0) addLine({ kind: "coupon", name: "その他クーポン", amount: -v });
+    } else {
+      if (v > 0) addLine({ kind: "discount", name: "値引き", amount: -v });
+    }
+    setDiscValue("");
+  }
+
+  function addPayment() {
+    const amt = payAmount === "" ? Math.max(0, shortage) : Number(payAmount) || 0;
+    if (amt <= 0) return;
+    setPayments((ps) => [...ps, { id: `pay-${Date.now()}`, method: payMethod, amount: amt }]);
+    setPayAmount("");
+  }
+
+  function confirm() {
+    const consumed = lines
+      .filter((l) => l.kind === "ticketUse" && l.ticketId)
+      .map((l) => {
+        const t = heldTickets.find((x) => x.id === l.ticketId)!;
+        return { name: t.name, count: l.count ?? 1, remaining: Math.max(0, t.remaining - (l.count ?? 1)) };
+      });
+    setResult({
+      totals,
+      payments: payments.length ? payments : totals.total === 0 ? [] : [{ id: "p", method: payMethod, amount: totals.total }],
+      serviceStaff: staffById(serviceStaffId)?.name,
+      cashierStaff: staffById(cashierStaffId)?.name,
+      ticketSellStaff: hasTicketBuy ? staffById(ticketSellStaffId)?.name : undefined,
+      ticketUseStaff: hasTicketUse ? staffById(ticketUseStaffId)?.name : undefined,
+      consumed,
+    });
+    onComplete(r.id);
+  }
+
+  if (result) {
+    return <DoneView customer={customer} result={result} onClose={onClose} />;
   }
 
   return (
@@ -116,119 +188,151 @@ function CheckoutBody({ reservation: r, onComplete, onClose }: { reservation: Re
         </DialogDescription>
       </DialogHeader>
 
-      {/* 基本情報 */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Info label="来店回数" value={`${customer?.visitCount ?? 0}回目`} />
         <Info label="滞在時間" value={stay} />
-        <Info label="担当" value={staff?.name.split(" ")[0] ?? "—"} />
-        <Info label="回数券" value={customer ? ticketStatus(customer).label : "なし"} />
+        <Info label="施術メニュー" value={lines.filter((l) => l.kind === "menu").map((l) => l.name).join("+") || "—"} />
+        <Info label="保有回数券" value={heldTickets.length ? `${heldTickets.length}種` : "なし"} />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_300px]">
-        {/* 明細 */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_320px]">
+        {/* 明細 + 追加 */}
         <div className="space-y-3">
           <div className="rounded-xl border border-border">
             <div className="border-b border-border px-3 py-2 text-xs font-semibold text-muted-foreground">会計明細</div>
-            <div className="max-h-64 overflow-y-auto thin-scrollbar">
+            <div className="max-h-56 overflow-y-auto thin-scrollbar">
               {lines.length === 0 && <div className="px-3 py-4 text-center text-sm text-muted-foreground">明細がありません</div>}
               {lines.map((l) => (
                 <div key={l.id} className="flex items-center gap-2 border-b border-border/50 px-3 py-2 text-sm last:border-0">
-                  <span className="shrink-0 rounded bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground">
-                    {LINE_KIND_LABEL[l.kind]}
-                  </span>
+                  <span className="shrink-0 rounded bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground">{LINE_KIND_LABEL[l.kind]}</span>
                   <span className="min-w-0 flex-1 truncate">{l.name}</span>
+                  {l.redeemValue ? <span className="shrink-0 text-[10px] text-muted-foreground">消化売上 {yen(l.redeemValue)}</span> : null}
                   <span className={cn("shrink-0 tabular-nums", LINE_TONE[l.kind] ?? "text-foreground")}>{yen(l.amount)}</span>
-                  <button onClick={() => removeLine(l.id)} className="shrink-0 text-muted-foreground hover:text-rose-600">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
+                  <button onClick={() => removeLine(l.id)} className="shrink-0 text-muted-foreground hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* 追加コントロール */}
+          {/* 追加項目 */}
           <div className="space-y-2 rounded-xl border border-border p-3">
             <div className="text-xs font-semibold text-muted-foreground">項目を追加</div>
             <div className="grid grid-cols-2 gap-2">
-              <AddSelect label="店販" items={PRODUCTS} onAdd={(it) => addLine("product", it.name, it.price)} />
-              <AddSelect label="オプション" items={OPTIONS} onAdd={(it) => addLine("option", it.name, it.price)} />
-              <AddSelect label="回数券購入" items={TICKET_PLANS} onAdd={(it) => addLine("ticketBuy", it.name, it.price)} />
-              <AddSelect label="サブスク" items={MEMBERSHIP_PLANS} onAdd={(it) => addLine("membership", it.name, it.price)} />
-              <AddSelect label="クーポン" items={COUPONS.map((c) => ({ id: c.id, name: c.name, price: 0 }))} onAdd={(it) => addCoupon(it.id)} />
+              <AddSelect label="店販" items={PRODUCTS} onAdd={(it) => addLine({ kind: "product", name: it.name, amount: it.price })} />
+              <AddSelect label="オプション" items={OPTIONS} onAdd={(it) => addLine({ kind: "option", name: it.name, amount: it.price })} />
+              <AddSelect label="回数券購入" items={TICKET_PLANS} onAdd={(it) => addLine({ kind: "ticketBuy", name: it.name, amount: it.price })} />
+              <AddSelect label="サブスク" items={MEMBERSHIP_PLANS} onAdd={(it) => addLine({ kind: "membership", name: it.name, amount: it.price })} />
             </div>
             <div className="flex flex-wrap gap-1.5">
-              <QuickBtn onClick={() => { const m = lines.find((l) => l.kind === "menu"); addLine("ticketUse", `回数券消化（${customer ? ticketStatus(customer).label : ""}）`, m ? -m.amount : 0); }}>
-                <TicketIcon className="h-3.5 w-3.5" /> 回数券消化
-              </QuickBtn>
-              <QuickBtn onClick={() => addLine("enrollment", "入会金", ENROLLMENT_FEE)}>＋入会金</QuickBtn>
-              <QuickBtn onClick={() => addLine("referral", "紹介特典", -REFERRAL_DISCOUNT)}>紹介特典</QuickBtn>
-              <QuickBtn onClick={() => addLine("discount", "値引き", -500)}>値引き ¥500</QuickBtn>
+              <QuickBtn onClick={() => addLine({ kind: "enrollment", name: "入会金", amount: ENROLLMENT_FEE })}>＋入会金</QuickBtn>
+            </div>
+
+            {/* 回数券消化 */}
+            {heldTickets.length > 0 && (
+              <div className="rounded-lg bg-secondary/40 p-2">
+                <div className="mb-1 text-[11px] font-semibold text-muted-foreground">回数券を消化</div>
+                <div className="flex items-center gap-1.5">
+                  <select value={ticketId} onChange={(e) => setTicketId(e.target.value)} className="h-8 min-w-0 flex-1 rounded-md border border-input bg-card px-2 text-xs">
+                    {heldTickets.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}（残{t.remaining}・{t.durationMin}分）</option>
+                    ))}
+                  </select>
+                  <input type="number" min={1} value={consumeCount} onChange={(e) => setConsumeCount(Math.max(1, Number(e.target.value) || 1))} className="h-8 w-12 rounded-md border border-input bg-card px-2 text-center text-xs" />
+                  <span className="text-[11px] text-muted-foreground">回</span>
+                  <Button size="sm" variant="outline" onClick={consumeTicket}>消化</Button>
+                </div>
+              </div>
+            )}
+
+            {/* 値引き・クーポン */}
+            <div className="rounded-lg bg-secondary/40 p-2">
+              <div className="mb-1 text-[11px] font-semibold text-muted-foreground">値引き・クーポン</div>
+              <div className="mb-1.5 flex flex-wrap gap-1.5">
+                <QuickBtn onClick={() => addLine({ kind: "discount", name: "値引き", amount: -500 })}>¥500引き</QuickBtn>
+                <QuickBtn onClick={() => addLine({ kind: "discount", name: "値引き", amount: -1000 })}>¥1,000引き</QuickBtn>
+                <QuickBtn onClick={() => addLine({ kind: "referral", name: "紹介特典", amount: -REFERRAL_DISCOUNT })}>紹介特典</QuickBtn>
+                <QuickBtn onClick={() => addLine({ kind: "discount", name: "端数調整", amount: -(totals.total % 100) })}>端数調整</QuickBtn>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <select value={discKind} onChange={(e) => setDiscKind(e.target.value as typeof discKind)} className="h-8 rounded-md border border-input bg-card px-2 text-xs">
+                  <option value="amount">固定金額</option>
+                  <option value="percent">割合(%)</option>
+                  <option value="coupon">その他クーポン</option>
+                </select>
+                <input type="number" value={discValue} onChange={(e) => setDiscValue(e.target.value)} placeholder={discKind === "percent" ? "%" : "¥"} className="h-8 w-20 rounded-md border border-input bg-card px-2 text-right text-xs" />
+                <Button size="sm" variant="outline" onClick={addDiscount}><Plus className="h-3.5 w-3.5" />追加</Button>
+              </div>
+            </div>
+          </div>
+
+          {/* 担当者 */}
+          <div className="space-y-2 rounded-xl border border-border p-3">
+            <div className="text-xs font-semibold text-muted-foreground">担当者</div>
+            <div className="grid grid-cols-2 gap-2">
+              <StaffSelect label="施術担当" value={serviceStaffId} onChange={setServiceStaffId} />
+              <StaffSelect label="会計担当" value={cashierStaffId} onChange={setCashierStaffId} />
+              {hasTicketBuy && <StaffSelect label="回数券販売担当" value={ticketSellStaffId} onChange={setTicketSellStaffId} />}
+              {hasTicketUse && <StaffSelect label="回数券消化担当" value={ticketUseStaffId} onChange={setTicketUseStaffId} />}
             </div>
           </div>
         </div>
 
-        {/* 会計結果 + 支払い */}
+        {/* 結果 + 支払い */}
         <div className="space-y-3">
           <div className="rounded-xl border border-border bg-secondary/30 p-3">
             <div className="flex items-baseline justify-between">
-              <span className="text-xs text-muted-foreground">合計（税込）</span>
-              <span className="text-2xl font-bold tabular-nums text-foreground">{yen(totals.total)}</span>
+              <span className="text-xs text-muted-foreground">本日会計（税込）</span>
+              <span className="text-2xl font-bold tabular-nums">{yen(totals.total)}</span>
             </div>
             <div className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">
               <Line l="税抜" v={yen(totals.taxExcluded)} />
               <Line l="消費税(10%)" v={yen(totals.tax)} />
               <div className="my-1 border-t border-border/60" />
               <Line l="技術売上" v={yen(totals.tech)} />
-              <Line l="店販売上" v={yen(totals.retail)} />
-              {totals.ticket > 0 && <Line l="回数券売上" v={yen(totals.ticket)} />}
+              {totals.retail > 0 && <Line l="店販売上" v={yen(totals.retail)} />}
+              {totals.ticketBuy > 0 && <Line l="回数券購入売上" v={yen(totals.ticketBuy)} />}
               {totals.membership > 0 && <Line l="会員・入会金" v={yen(totals.membership)} />}
+              {totals.redeem > 0 && <Line l="回数券消化売上（別計上）" v={yen(totals.redeem)} />}
               <div className="my-1 border-t border-border/60" />
-              <Line l={`担当売上（${staff?.name.split(" ")[0] ?? ""}）`} v={yen(totals.tech)} />
-              <Line l="店舗売上" v={yen(totals.total)} bold />
+              <Line l="店舗売上" v={yen(totals.total)} />
+              <Line l="総売上（収受+消化）" v={yen(totals.grand)} bold />
             </div>
           </div>
 
+          {/* 支払い(複合対応) */}
           <div className="rounded-xl border border-border p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-semibold text-muted-foreground">支払い方法</span>
-              <button onClick={() => setSplit((s) => !s)} className={cn("text-[11px] font-medium", split ? "text-primary" : "text-muted-foreground hover:text-foreground")}>
-                {split ? "単一に戻す" : "複合支払い"}
-              </button>
-            </div>
-            {!split ? (
-              <div className="grid grid-cols-2 gap-1.5">
-                {PAYMENT_METHODS.map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setMethod(m)}
-                    className={cn("rounded-md border px-2 py-1.5 text-xs font-medium transition-colors", method === m ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-secondary")}
-                  >
-                    {m}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                {PAYMENT_METHODS.map((m) => (
-                  <div key={m} className="flex items-center gap-2">
-                    <span className="w-20 text-xs">{m}</span>
-                    <input
-                      type="number"
-                      value={splitPay[m] || ""}
-                      onChange={(e) => setSplitPay((p) => ({ ...p, [m]: Number(e.target.value) || 0 }))}
-                      className="h-8 flex-1 rounded-md border border-input bg-card px-2 text-right text-xs tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      placeholder="0"
-                    />
-                  </div>
-                ))}
-                <div className={cn("text-right text-[11px] font-medium", remaining === 0 ? "text-emerald-600" : "text-rose-600")}>
-                  残額 {yen(remaining)}
+            <div className="mb-2 text-xs font-semibold text-muted-foreground">支払い方法（複合可）</div>
+            <div className="space-y-1 mb-2">
+              {payments.map((p, i) => (
+                <div key={p.id} className="flex items-center gap-2 text-sm">
+                  <span className="w-5 text-[11px] text-muted-foreground">{i + 1}.</span>
+                  <span className="flex-1">{p.method}</span>
+                  <span className="tabular-nums">{yen(p.amount)}</span>
+                  <button onClick={() => setPayments((ps) => ps.filter((x) => x.id !== p.id))} className="text-muted-foreground hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
                 </div>
-              </div>
-            )}
+              ))}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <select value={payMethod} onChange={(e) => setPayMethod(e.target.value as PaymentMethod)} className="h-8 rounded-md border border-input bg-card px-2 text-xs">
+                {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+              <input type="number" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder={shortage > 0 ? String(shortage) : "0"} className="h-8 w-24 rounded-md border border-input bg-card px-2 text-right text-xs tabular-nums" />
+              <Button size="sm" variant="outline" onClick={addPayment}><Plus className="h-3.5 w-3.5" />追加</Button>
+            </div>
+            <div className="mt-2 space-y-0.5 border-t border-border/60 pt-2 text-[11px]">
+              <Line l="合計" v={yen(totals.total)} />
+              <Line l="支払い済み" v={yen(paidSum)} />
+              {shortage > 0 ? (
+                <div className="flex justify-between font-semibold text-rose-600"><span>不足額</span><span className="tabular-nums">{yen(shortage)}</span></div>
+              ) : shortage < 0 ? (
+                <div className="flex justify-between font-semibold text-emerald-600"><span>お釣り</span><span className="tabular-nums">{yen(-shortage)}</span></div>
+              ) : (
+                <div className="flex justify-between font-semibold text-emerald-600"><span>残額</span><span>¥0</span></div>
+              )}
+            </div>
           </div>
 
-          <Button className="w-full" size="lg" disabled={!canConfirm} onClick={() => { onComplete(r.id); setStep("done"); }}>
+          <Button className="w-full" size="lg" disabled={!canConfirm} onClick={confirm}>
             <CheckCircle2 className="h-4 w-4" /> {yen(totals.total)} 会計確定
           </Button>
         </div>
@@ -241,7 +345,7 @@ function Info({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-border bg-card px-3 py-2">
       <div className="text-[10px] text-muted-foreground">{label}</div>
-      <div className="text-sm font-semibold">{value}</div>
+      <div className="truncate text-sm font-semibold">{value}</div>
     </div>
   );
 }
@@ -255,38 +359,34 @@ function Line({ l, v, bold }: { l: string; v: string; bold?: boolean }) {
 }
 function QuickBtn({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
   return (
-    <button onClick={onClick} className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
-      {children}
-    </button>
+    <button onClick={onClick} className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">{children}</button>
   );
 }
 function AddSelect({ label, items, onAdd }: { label: string; items: { id: string; name: string; price: number }[]; onAdd: (it: { id: string; name: string; price: number }) => void }) {
   return (
-    <select
-      value=""
-      onChange={(e) => {
-        const it = items.find((x) => x.id === e.target.value);
-        if (it) onAdd(it);
-        e.target.value = "";
-      }}
-      className="h-8 rounded-md border border-input bg-card px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
+    <select value="" onChange={(e) => { const it = items.find((x) => x.id === e.target.value); if (it) onAdd(it); e.target.value = ""; }} className="h-8 rounded-md border border-input bg-card px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
       <option value="">＋ {label}</option>
-      {items.map((it) => (
-        <option key={it.id} value={it.id}>
-          {it.name}{it.price ? `（${yen(it.price)}）` : ""}
-        </option>
-      ))}
+      {items.map((it) => <option key={it.id} value={it.id}>{it.name}{it.price ? `（${yen(it.price)}）` : ""}</option>)}
     </select>
   );
 }
+function StaffSelect({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <label className="block">
+      <span className="text-[10px] text-muted-foreground">{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="mt-0.5 h-8 w-full rounded-md border border-input bg-card px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        {STAFF.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+      </select>
+    </label>
+  );
+}
 
-// ===== 会計完了 → 次アクション + AI =====
-function DoneView({ reservation: r, total, method, onClose }: { reservation: Reservation; total: number; method: string; onClose: () => void }) {
-  const customer = customerById(r.customerId ?? "");
+// ===== 会計完了 =====
+function DoneView({ customer, result, onClose }: { customer?: Customer; result: CheckoutResult; onClose: () => void }) {
   const ai = customer ? checkoutAI(customer) : null;
   const [done, setDone] = React.useState<Set<string>>(new Set());
   const toggle = (k: string) => setDone((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
+  const t = result.totals;
 
   const ACTIONS = [
     { k: "next", label: "次回予約", icon: CalendarPlus },
@@ -298,17 +398,54 @@ function DoneView({ reservation: r, total, method, onClose }: { reservation: Res
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col items-center gap-1 py-2 text-center">
+    <div className="max-h-[80vh] space-y-4 overflow-y-auto thin-scrollbar">
+      <div className="flex flex-col items-center gap-1 py-1 text-center">
         <CheckCircle2 className="h-10 w-10 text-emerald-500" />
         <div className="text-lg font-semibold">会計が完了しました</div>
-        <div className="text-sm text-muted-foreground">{yen(total)} ・ {method} ・ {customer?.name} 様</div>
+        <div className="text-sm text-muted-foreground">{yen(t.total)} ・ {customer?.name} 様</div>
+      </div>
+
+      {/* 支払い・担当 */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-xl border border-border p-3 text-xs">
+          <div className="mb-1 font-semibold text-muted-foreground">支払い</div>
+          {result.payments.length === 0 ? <div className="text-muted-foreground">回数券消化のみ（収受なし）</div> : result.payments.map((p, i) => (
+            <Line key={i} l={p.method} v={yen(p.amount)} />
+          ))}
+        </div>
+        <div className="rounded-xl border border-border p-3 text-xs">
+          <div className="mb-1 font-semibold text-muted-foreground">担当</div>
+          <Line l="施術" v={result.serviceStaff ?? "—"} />
+          <Line l="会計" v={result.cashierStaff ?? "—"} />
+          {result.ticketSellStaff && <Line l="回数券販売" v={result.ticketSellStaff} />}
+          {result.ticketUseStaff && <Line l="回数券消化" v={result.ticketUseStaff} />}
+        </div>
+      </div>
+
+      {/* 反映先 */}
+      <div className="rounded-xl border border-border p-3">
+        <div className="mb-1.5 text-xs font-semibold text-muted-foreground">会計結果の反映</div>
+        <div className="space-y-0.5 text-[11px]">
+          <Line l="総売上（収受+消化）" v={yen(t.grand)} bold />
+          <Line l="店舗売上（収受）" v={yen(t.total)} />
+          <Line l="回数券購入売上" v={yen(t.ticketBuy)} />
+          <Line l="回数券消化売上" v={yen(t.redeem)} />
+          {result.consumed.map((c, i) => (
+            <Line key={i} l={`回数券残数（${c.name}）`} v={`残${c.remaining}回`} />
+          ))}
+          <Line l="LTV加算" v={yen(t.grand)} />
+        </div>
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {["顧客詳細", "KPI分析", "LINE/AI戦略"].map((x) => (
+            <span key={x} className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700"><CheckCircle2 className="h-3 w-3" />{x}へ連携</span>
+          ))}
+        </div>
       </div>
 
       {ai?.needsFollow && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          要フォロー対象：回数券残わずか / 次回予約なし。下記アクションでフォローしましょう。
+          要フォロー対象：回数券残わずか / 次回予約なし。
         </div>
       )}
 
@@ -319,11 +456,7 @@ function DoneView({ reservation: r, total, method, onClose }: { reservation: Res
             const on = done.has(a.k);
             const Icon = a.icon;
             return (
-              <button
-                key={a.k}
-                onClick={() => toggle(a.k)}
-                className={cn("flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-xs font-medium transition-colors", on ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-border hover:bg-secondary")}
-              >
+              <button key={a.k} onClick={() => toggle(a.k)} className={cn("flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-xs font-medium transition-colors", on ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-border hover:bg-secondary")}>
                 {on ? <CheckCircle2 className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
                 {a.label}
               </button>
@@ -334,9 +467,7 @@ function DoneView({ reservation: r, total, method, onClose }: { reservation: Res
 
       {ai && (
         <div className="rounded-xl border border-accent/30 bg-accent/5 p-3">
-          <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-accent">
-            <Sparkles className="h-4 w-4" /> AI戦略の提案
-          </div>
+          <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-accent"><Sparkles className="h-4 w-4" /> AI戦略の提案</div>
           <div className="space-y-1.5 text-sm">
             <Line l="失客リスク" v={ai.churnRisk} />
             <Line l="次回来店推奨日" v={ai.nextVisitRecommend} />
@@ -350,7 +481,7 @@ function DoneView({ reservation: r, total, method, onClose }: { reservation: Res
         </div>
       )}
 
-      <div className="flex justify-end gap-2">
+      <div className="flex justify-end">
         <Button variant="outline" onClick={onClose}>閉じる</Button>
       </div>
     </div>

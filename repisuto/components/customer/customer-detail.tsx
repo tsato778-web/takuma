@@ -379,13 +379,15 @@ function TicketsTab({ c }: { c: Customer }) {
             const badgeCls = tone === "danger" ? "bg-rose-100 text-rose-700" : tone === "warn" ? "bg-amber-100 text-amber-700" : "bg-accent/12 text-accent";
             const iconCls = tone === "danger" ? "text-rose-500" : tone === "warn" ? "text-amber-500" : "text-accent";
             return (
-              <Card key={t.name} className={cn("flex items-center gap-3 p-3", toneCls)}>
+              <Card key={t.id} className={cn("flex items-center gap-3 p-3", toneCls)}>
                 <TicketIcon className={cn("h-5 w-5", iconCls)} />
                 <div className="flex-1">
                   <div className="text-sm font-medium">{t.name}</div>
                   <div className="text-[11px] text-muted-foreground">
-                    残り {t.remaining} 回{t.remaining <= 1 && <span className="ml-1 font-medium text-amber-700">{t.remaining === 0 ? "・要追加販売" : "・残りわずか"}</span>}
+                    消化 {t.totalCount - t.remaining}/{t.totalCount}回 ・ 残り {t.remaining}回 ・ {t.durationMin}分
+                    {t.remaining <= 1 && <span className="ml-1 font-medium text-amber-700">{t.remaining === 0 ? "・要追加販売" : "・残りわずか"}</span>}
                   </div>
+                  <div className="text-[10px] text-muted-foreground">対応：{t.menus} ・ 有効期限 {t.validUntil.replace(/-/g, "/")}</div>
                 </div>
                 <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", badgeCls)}>残{t.remaining}</span>
               </Card>

@@ -75,7 +75,10 @@ export interface LineItem {
   id: string;
   kind: LineKind;
   name: string;
-  amount: number; // 税込・割引はマイナス
+  amount: number; // 税込・割引はマイナス。回数券消化は本日収受から差し引くためマイナス
+  count?: number; // 回数券消化回数
+  redeemValue?: number; // 回数券消化売上(別計上)
+  ticketId?: string; // 消化した回数券
 }
 
 export const LINE_KIND_LABEL: Record<LineKind, string> = {
@@ -91,8 +94,8 @@ export const LINE_KIND_LABEL: Record<LineKind, string> = {
   referral: "紹介特典",
 };
 
-export type PaymentMethod = "現金" | "クレジット" | "PayPay" | "QR";
-export const PAYMENT_METHODS: PaymentMethod[] = ["現金", "クレジット", "PayPay", "QR"];
+export type PaymentMethod = "現金" | "クレジット" | "PayPay" | "QR" | "その他";
+export const PAYMENT_METHODS: PaymentMethod[] = ["現金", "クレジット", "PayPay", "QR", "その他"];
 
 export interface Payment {
   method: PaymentMethod;
@@ -107,13 +110,15 @@ export function initialLines(r: Reservation): LineItem[] {
 }
 
 export interface Totals {
-  total: number; // 税込合計
+  total: number; // 本日会計(税込・現金収受)
   taxExcluded: number;
   tax: number;
-  tech: number; // 技術売上(施術+オプション)
+  tech: number; // 技術売上(施術+オプション-回数券消化分)
   retail: number; // 店販売上
-  ticket: number; // 回数券売上
+  ticketBuy: number; // 回数券購入売上
   membership: number; // 会員・入会金
+  redeem: number; // 回数券消化売上(別計上)
+  grand: number; // 総売上(収受+消化)
 }
 
 export function computeTotals(lines: LineItem[]): Totals {
@@ -121,14 +126,17 @@ export function computeTotals(lines: LineItem[]): Totals {
     lines.filter((l) => kinds.includes(l.kind)).reduce((s, l) => s + l.amount, 0);
   const total = lines.reduce((s, l) => s + l.amount, 0);
   const taxExcluded = Math.round(total / (1 + TAX_RATE));
+  const redeem = lines.reduce((s, l) => s + (l.redeemValue ?? 0), 0);
   return {
     total,
     taxExcluded,
     tax: total - taxExcluded,
-    tech: sumKind(["menu", "option"]),
+    tech: sumKind(["menu", "option", "ticketUse"]),
     retail: sumKind(["product"]),
-    ticket: sumKind(["ticketBuy"]),
+    ticketBuy: sumKind(["ticketBuy"]),
     membership: sumKind(["membership", "enrollment"]),
+    redeem,
+    grand: total + redeem,
   };
 }
 
