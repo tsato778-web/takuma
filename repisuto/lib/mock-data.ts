@@ -63,9 +63,11 @@ export interface Customer {
   messageTags: string[]; // LINEメッセージタグ
   ltv: number; // 累計売上
   lastVisitDate: string; // 最終来店日
-  nextVisitDate?: string; // 次回予約
+  nextVisitDate?: string; // 次回予約(日付)
+  nextVisitTime?: string; // 次回予約(時刻 HH:MM)
   monthlyMember: { active: boolean; plan?: string }; // 月額会員状況
   lineLinked: boolean; // LineLink の有無
+  lineName?: string; // LINE登録名
   tickets: Ticket[]; // ACTIVE な回数券
   visitCount: number;
 }
@@ -144,12 +146,12 @@ export const MENUS: Menu[] = [
 ];
 
 export const CUSTOMERS: Customer[] = [
-  { id: "cus_kobayashi", storeId: STORE.id, customerNo: 3, name: "小林 真央", kana: "コバヤシ マオ", phone: "090-9999-0000", gender: "F", firstSource: "Instagram", registerMedia: "公式LINE", funnel: "Instagram → 初回フェイシャル → 回数券 → 月額会員", tags: ["VIP"], messageTags: ["VIP", "乾燥肌", "30代"], ltv: 482000, lastVisitDate: "2026-05-10", nextVisitDate: "2026-06-02", monthlyMember: { active: true, plan: "プレミアム会員 ¥22,000/月" }, lineLinked: true, tickets: [{ name: "スパ5回券", remaining: 4 }], visitCount: 21 },
-  { id: "cus_yamada", storeId: STORE.id, customerNo: 8, name: "山田 花子", kana: "ヤマダ ハナコ", phone: "090-1111-2222", gender: "F", firstSource: "Meta広告", registerMedia: "公式LINE", funnel: "Meta広告 → カウンセリングフォーム → カラー → 回数券", tags: ["VIP", "敏感肌"], messageTags: ["敏感肌", "カラー", "40代"], ltv: 256000, lastVisitDate: "2026-05-20", monthlyMember: { active: true, plan: "スタンダード会員 ¥11,000/月" }, lineLinked: true, tickets: [{ name: "カット10回券", remaining: 3 }], visitCount: 12 },
-  { id: "cus_takahashi", storeId: STORE.id, customerNo: 12, name: "高橋 健", kana: "タカハシ ケン", phone: "090-7777-8888", gender: "M", firstSource: "ホットペッパー", registerMedia: "Web予約", funnel: "ホットペッパー → 初回カット → カラー", tags: [], messageTags: ["カラー", "30代"], ltv: 132000, lastVisitDate: "2026-04-28", monthlyMember: { active: false }, lineLinked: true, tickets: [{ name: "カラー6回券", remaining: 1 }], visitCount: 8 },
-  { id: "cus_nakamura", storeId: STORE.id, customerNo: 15, name: "中村 ゆい", kana: "ナカムラ ユイ", phone: "090-3333-4444", gender: "F", firstSource: "Instagram", registerMedia: "公式LINE", funnel: "Instagram → 学割フォーム → ヘッドスパ", tags: ["学割"], messageTags: ["学割", "20代", "スパ"], ltv: 28600, lastVisitDate: "2026-05-01", monthlyMember: { active: false }, lineLinked: true, tickets: [], visitCount: 3 },
-  { id: "cus_saito", storeId: STORE.id, customerNo: 19, name: "斎藤 美月", kana: "サイトウ ミヅキ", phone: "080-8765-4321", gender: "F", firstSource: "Google", registerMedia: "Web予約", funnel: "Google → 初回カラー → リピート", tags: [], messageTags: ["カラー", "30代"], ltv: 64800, lastVisitDate: "2026-05-15", monthlyMember: { active: false }, lineLinked: true, tickets: [], visitCount: 5 },
-  { id: "cus_kato", storeId: STORE.id, customerNo: 22, name: "加藤 結衣", kana: "カトウ ユイ", phone: "080-2222-3333", gender: "F", firstSource: "紹介", registerMedia: "公式LINE", funnel: "紹介 → 初回フェイシャル → 回数券 → 月額会員", tags: ["紹介"], messageTags: ["肩こり", "紹介", "フェイシャル", "30代"], ltv: 198000, lastVisitDate: "2026-05-18", nextVisitDate: "2026-05-27", monthlyMember: { active: true, plan: "スタンダード会員 ¥11,000/月" }, lineLinked: true, tickets: [{ name: "フェイシャル4回券", remaining: 2 }], visitCount: 7 },
+  { id: "cus_kobayashi", storeId: STORE.id, customerNo: 3, name: "小林 真央", kana: "コバヤシ マオ", phone: "090-9999-0000", gender: "F", firstSource: "Instagram", registerMedia: "公式LINE", funnel: "Instagram → 初回フェイシャル → 回数券 → 月額会員", tags: ["VIP"], messageTags: ["VIP", "乾燥肌", "30代"], ltv: 482000, lastVisitDate: "2026-05-10", nextVisitDate: "2026-06-02", nextVisitTime: "14:00", monthlyMember: { active: true, plan: "プレミアム会員 ¥22,000/月" }, lineLinked: true, lineName: "まお", tickets: [{ name: "スパ5回券", remaining: 4 }], visitCount: 21 },
+  { id: "cus_yamada", storeId: STORE.id, customerNo: 8, name: "山田 花子", kana: "ヤマダ ハナコ", phone: "090-1111-2222", gender: "F", firstSource: "Meta広告", registerMedia: "公式LINE", funnel: "Meta広告 → カウンセリングフォーム → カラー → 回数券", tags: ["VIP", "敏感肌"], messageTags: ["敏感肌", "カラー", "40代"], ltv: 256000, lastVisitDate: "2026-05-20", monthlyMember: { active: true, plan: "スタンダード会員 ¥11,000/月" }, lineLinked: true, lineName: "hanako🌸", tickets: [{ name: "カット10回券", remaining: 3 }], visitCount: 12 },
+  { id: "cus_takahashi", storeId: STORE.id, customerNo: 12, name: "高橋 健", kana: "タカハシ ケン", phone: "090-7777-8888", gender: "M", firstSource: "ホットペッパー", registerMedia: "Web予約", funnel: "ホットペッパー → 初回カット → カラー", tags: [], messageTags: ["カラー", "30代"], ltv: 132000, lastVisitDate: "2026-04-28", monthlyMember: { active: false }, lineLinked: true, lineName: "ケン", tickets: [{ name: "カラー6回券", remaining: 1 }], visitCount: 8 },
+  { id: "cus_nakamura", storeId: STORE.id, customerNo: 15, name: "中村 ゆい", kana: "ナカムラ ユイ", phone: "090-3333-4444", gender: "F", firstSource: "Instagram", registerMedia: "公式LINE", funnel: "Instagram → 学割フォーム → ヘッドスパ", tags: ["学割"], messageTags: ["学割", "20代", "スパ"], ltv: 28600, lastVisitDate: "2026-05-01", monthlyMember: { active: false }, lineLinked: true, lineName: "yui.n", tickets: [], visitCount: 3 },
+  { id: "cus_saito", storeId: STORE.id, customerNo: 19, name: "斎藤 美月", kana: "サイトウ ミヅキ", phone: "080-8765-4321", gender: "F", firstSource: "Google", registerMedia: "Web予約", funnel: "Google → 初回カラー → リピート", tags: [], messageTags: ["カラー", "30代"], ltv: 64800, lastVisitDate: "2026-05-15", monthlyMember: { active: false }, lineLinked: true, lineName: "mizuki", tickets: [], visitCount: 5 },
+  { id: "cus_kato", storeId: STORE.id, customerNo: 22, name: "加藤 結衣", kana: "カトウ ユイ", phone: "080-2222-3333", gender: "F", firstSource: "紹介", registerMedia: "公式LINE", funnel: "紹介 → 初回フェイシャル → 回数券 → 月額会員", tags: ["紹介"], messageTags: ["肩こり", "紹介", "フェイシャル", "30代"], ltv: 198000, lastVisitDate: "2026-05-18", nextVisitDate: "2026-05-27", nextVisitTime: "14:30", monthlyMember: { active: true, plan: "スタンダード会員 ¥11,000/月" }, lineLinked: true, lineName: "ゆい", tickets: [{ name: "フェイシャル4回券", remaining: 2 }], visitCount: 7 },
   { id: "cus_watanabe", storeId: STORE.id, customerNo: 27, name: "渡辺 あおい", kana: "ワタナベ アオイ", phone: "080-1234-5678", gender: "F", firstSource: "Instagram", registerMedia: "店頭", funnel: "Instagram → 店頭来店 → フェイシャル", tags: ["敏感肌"], messageTags: ["敏感肌", "20代"], ltv: 18700, lastVisitDate: "2026-05-05", monthlyMember: { active: false }, lineLinked: false, tickets: [], visitCount: 2 },
   { id: "cus_ito", storeId: STORE.id, customerNo: 31, name: "伊藤 さくら", kana: "イトウ サクラ", phone: "090-5555-6666", gender: "F", firstSource: "Meta広告", registerMedia: "公式LINE", funnel: "Meta広告 → 初回カウンセリングフォーム → 初回フェイシャル", tags: ["新規"], messageTags: ["新規", "肩こり", "20代"], ltv: 9900, lastVisitDate: "2026-05-27", monthlyMember: { active: false }, lineLinked: false, tickets: [], visitCount: 1 },
 ];
@@ -221,6 +223,10 @@ export const CURRENT_USER = { id: "user_sasaki", name: "佐々木", role: "MANAG
 // 新規顧客判定 (来店1回以下 or 新規タグ)。台帳で強調表示する
 export const isNewCustomer = (c: Customer | undefined): boolean =>
   !!c && (c.visitCount <= 1 || c.tags.includes("新規"));
+
+// 離反リスク判定: 回数券残なし AND 次回予約なし → 要フォロー
+export const isChurnRisk = (c: Customer): boolean =>
+  ticketRemainingTotal(c) === 0 && !c.nextVisitDate;
 
 // コース別カラー (先頭メニュー基準)。メニュー未設定は slate
 export const reservationColor = (r: Reservation): MenuColor =>

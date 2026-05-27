@@ -39,6 +39,12 @@ export function jpDate(s: string): string {
   return `${d.getMonth() + 1}/${d.getDate()}(${w})`;
 }
 
+// 次回予約の表示ラベル ("5/30(金) 14:00")。なければ null
+export function nextVisitLabel(c: { nextVisitDate?: string; nextVisitTime?: string }): string | null {
+  if (!c.nextVisitDate) return null;
+  return `${jpDate(c.nextVisitDate)}${c.nextVisitTime ? ` ${c.nextVisitTime}` : ""}`;
+}
+
 // ---- 来店履歴 ----
 export interface VisitRecord {
   id: string;

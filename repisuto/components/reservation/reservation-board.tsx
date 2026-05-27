@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, Plus, Store as StoreIcon } from "lucide-reac
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ReservationBlock } from "./reservation-block";
+import { DatePicker } from "./date-picker";
 import { NewReservationDialog } from "./new-reservation-dialog";
 import { ReservationDetailDialog } from "./reservation-detail-dialog";
 import { NotificationBell } from "@/components/notification-bell";
@@ -22,7 +23,6 @@ import {
   minToLabel,
   snapTo,
   clampMin,
-  formatDate,
   addDays,
   isSameDay,
   hourMarks,
@@ -311,7 +311,7 @@ export function ReservationBoard() {
           <Button variant="outline" size="icon" onClick={() => setDate((d) => addDays(d, 1))}>
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <div className="ml-2 text-sm font-semibold tabular-nums">{formatDate(date)}</div>
+          <DatePicker value={date} onChange={setDate} />
         </div>
 
         {/* 粒度切替 */}
