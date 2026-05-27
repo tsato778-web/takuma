@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { ReservationBlock } from "./reservation-block";
 import { NewReservationDialog } from "./new-reservation-dialog";
 import { ReservationDetailDialog } from "./reservation-detail-dialog";
+import { NotificationBell } from "@/components/notification-bell";
+import { SEED_NOTIFICATIONS, type AppNotification } from "@/lib/notifications";
 import {
   OPEN_MIN,
   CLOSE_MIN,
@@ -21,6 +23,7 @@ import {
   addDays,
   isSameDay,
   hourMarks,
+  parseDateKey,
 } from "@/lib/time";
 import {
   STAFF,
@@ -51,8 +54,11 @@ export function ReservationBoard() {
   const [prefill, setPrefill] = React.useState<{ staffId: string; start: number } | null>(null);
   const [detailId, setDetailId] = React.useState<string | null>(null);
   const [preview, setPreview] = React.useState<Preview | null>(null);
+  const [notifications, setNotifications] = React.useState<AppNotification[]>(SEED_NOTIFICATIONS);
+  const [highlightId, setHighlightId] = React.useState<string | null>(null);
 
   const trackRef = React.useRef<HTMLDivElement>(null);
+  const scrollRef = React.useRef<HTMLDivElement>(null);
   const justDragged = React.useRef(false);
 
   const { slot, pxPerMin } = GRAN_CONFIG[gran];
@@ -171,6 +177,37 @@ export function ReservationBoard() {
     setDetailId(null);
   }
 
+  // ---- 通知 (store_id 単位で分離) ----
+  const storeNotifications = React.useMemo(
+    () => notifications.filter((n) => n.storeId === storeId),
+    [notifications, storeId]
+  );
+
+  function markAllRead() {
+    setNotifications((ns) =>
+      ns.map((n) => (n.storeId === storeId ? { ...n, read: true } : n))
+    );
+  }
+
+  function jumpToNotification(n: AppNotification) {
+    setNotifications((ns) => ns.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
+    if (!n.reservationId) return;
+    const res = reservations.find((r) => r.id === n.reservationId);
+    if (!res) return;
+    setDate(parseDateKey(n.dateKey));
+    setHighlightId(res.id);
+    window.setTimeout(() => setHighlightId(null), 2600);
+    // 日付切替後のレイアウト確定を待ってから対象時刻へ横スクロール
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({
+          left: Math.max(0, (res.start - OPEN_MIN) * pxPerMin - 140),
+          behavior: "smooth",
+        });
+      })
+    );
+  }
+
   const detailRes = detailId ? reservations.find((r) => r.id === detailId) ?? null : null;
 
   function resolveForStaff(staffId: string) {
@@ -252,6 +289,11 @@ export function ReservationBoard() {
               未カルテ <b className="text-amber-600">{summary.noChart}</b>
             </span>
           </div>
+          <NotificationBell
+            notifications={storeNotifications}
+            onJump={jumpToNotification}
+            onMarkAllRead={markAllRead}
+          />
           <Button onClick={openNew} size="sm">
             <Plus className="h-4 w-4" /> 新規予約
           </Button>
@@ -259,7 +301,10 @@ export function ReservationBoard() {
       </div>
 
       {/* ===== 台帳 (横軸=時間 / 縦軸=スタッフ) ===== */}
-      <div className="thin-scrollbar relative flex-1 select-none overflow-auto bg-background">
+      <div
+        ref={scrollRef}
+        className="thin-scrollbar relative flex-1 select-none overflow-auto bg-background"
+      >
         <div style={{ width: LABEL_W + totalWidth }}>
           {/* 時間ヘッダー */}
           <div className="sticky top-0 z-30 flex" style={{ height: HEADER_H }}>
@@ -320,6 +365,7 @@ export function ReservationBoard() {
                     reservation={r}
                     pxPerMin={pxPerMin}
                     dragging={preview?.id === r.id}
+                    highlight={highlightId === r.id}
                     onBodyPointerDown={(e) => startDrag(e, r, "move")}
                     onResizePointerDown={(e) => startDrag(e, r, "resize")}
                   />

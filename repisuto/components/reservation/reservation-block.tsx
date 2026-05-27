@@ -25,6 +25,7 @@ interface Props {
   reservation: Reservation;
   pxPerMin: number;
   dragging?: boolean;
+  highlight?: boolean;
   onBodyPointerDown: (e: React.PointerEvent) => void;
   onResizePointerDown: (e: React.PointerEvent) => void;
 }
@@ -33,6 +34,7 @@ export function ReservationBlock({
   reservation: r,
   pxPerMin,
   dragging,
+  highlight,
   onBodyPointerDown,
   onResizePointerDown,
 }: Props) {
@@ -60,7 +62,8 @@ export function ReservationBlock({
       className={cn(
         "group absolute top-1 bottom-1 cursor-grab touch-none select-none overflow-hidden rounded-md border border-l-[3px] px-2 py-1 text-left shadow-sm transition-shadow hover:shadow-md hover:z-20 active:cursor-grabbing",
         STATUS_STYLE[r.status],
-        dragging && "z-30 shadow-lg ring-2 ring-primary/40"
+        dragging && "z-30 shadow-lg ring-2 ring-primary/40",
+        highlight && "z-30 shadow-lg ring-2 ring-accent"
       )}
     >
       <div className="flex items-center gap-1 text-[11px] font-semibold text-foreground">

@@ -46,6 +46,12 @@ export function isSameDay(a: Date, b: Date): boolean {
   );
 }
 
+/** "YYYY-MM-DD" -> Date (通知からのジャンプで日付を切り替える際に使用) */
+export function parseDateKey(key: string): Date {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
 /** 時間ヘッダーに表示する正時の配列 */
 export function hourMarks(): number[] {
   const marks: number[] = [];
