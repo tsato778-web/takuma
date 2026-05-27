@@ -11,6 +11,7 @@ import {
   Users,
   Ban,
   Minus,
+  AlertTriangle,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -23,6 +24,7 @@ import {
   ticketRemainingTotal,
   isNewCustomer,
   reservationColor,
+  serviceEndOf,
   MENU_COLOR,
   CANCEL_TYPE_LABEL,
   type BlockKind,
@@ -38,12 +40,16 @@ const BLOCK_ICON: Record<Exclude<BlockKind, "RESERVATION">, typeof Coffee> = {
 
 const HATCH =
   "repeating-linear-gradient(45deg, rgba(255,255,255,0.07) 0, rgba(255,255,255,0.07) 6px, transparent 6px, transparent 12px)";
+const HATCH_LIGHT =
+  "repeating-linear-gradient(45deg, rgba(15,23,42,0.10) 0, rgba(15,23,42,0.10) 4px, transparent 4px, transparent 8px)";
 
 interface Props {
   reservation: Reservation;
   pxPerMin: number;
   dragging?: boolean;
   highlight?: boolean;
+  conflict?: boolean;
+  conflictInfo?: string;
   onBodyPointerDown: (e: React.PointerEvent) => void;
   onResizePointerDown: (e: React.PointerEvent) => void;
 }
@@ -53,17 +59,21 @@ export function ReservationBlock({
   pxPerMin,
   dragging,
   highlight,
+  conflict,
+  conflictInfo,
   onBodyPointerDown,
   onResizePointerDown,
 }: Props) {
   const staff = staffById(r.staffId);
   const left = (r.start - OPEN_MIN) * pxPerMin;
   const width = (r.end - r.start) * pxPerMin;
+  const intervalPx = (r.intervalMin ?? 0) * pxPerMin;
 
   const sharedClass = cn(
     "group absolute top-1 bottom-1 cursor-grab touch-none select-none overflow-hidden rounded-md border border-l-[3px] px-2 py-1 text-left shadow-sm transition-shadow hover:shadow-md hover:z-20 active:cursor-grabbing",
     dragging && "z-30 shadow-lg ring-2 ring-primary/40",
-    highlight && "z-30 shadow-lg ring-2 ring-accent"
+    highlight && "z-30 shadow-lg ring-2 ring-accent",
+    conflict && "z-20 border-rose-400 ring-2 ring-rose-400"
   );
 
   const resizeHandle = (
@@ -72,8 +82,22 @@ export function ReservationBlock({
         e.stopPropagation();
         onResizePointerDown(e);
       }}
-      className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize bg-transparent group-hover:bg-black/10"
+      className="absolute right-0 top-0 z-20 h-full w-1.5 cursor-ew-resize bg-transparent group-hover:bg-black/10"
     />
+  );
+
+  // インターバル(準備時間)の帯。施術本体と見た目を分ける
+  const intervalBand = intervalPx > 0 && (
+    <div
+      className="pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center justify-center border-l border-dashed border-black/20"
+      style={{ width: intervalPx, backgroundColor: "rgba(255,255,255,0.5)", backgroundImage: HATCH_LIGHT }}
+    >
+      {intervalPx >= 30 && (
+        <span className="text-[8px] font-medium text-slate-500" style={{ writingMode: "vertical-rl" }}>
+          準備
+        </span>
+      )}
+    </div>
   );
 
   // ===== 予約以外(予約不可枠) = ダークアウト表示 =====
@@ -83,13 +107,14 @@ export function ReservationBlock({
       <div
         role="button"
         tabIndex={0}
+        title={conflictInfo}
         onPointerDown={onBodyPointerDown}
         onClick={(e) => e.stopPropagation()}
         style={{ left, width, borderLeftColor: staff?.color, backgroundImage: HATCH }}
         className={cn(sharedClass, "border-slate-700 bg-slate-600 text-white")}
       >
         <div className="flex items-center gap-1 text-[11px] font-semibold">
-          <Icon className="h-3 w-3 shrink-0" />
+          {conflict ? <AlertTriangle className="h-3 w-3 shrink-0 text-rose-300" /> : <Icon className="h-3 w-3 shrink-0" />}
           <span className="truncate">{blockTitle(r)}</span>
         </div>
         <div className="mt-auto text-[10px] text-white/70">予約不可 ・ {minToLabel(r.start)}</div>
@@ -136,20 +161,23 @@ export function ReservationBlock({
     <div
       role="button"
       tabIndex={0}
+      title={conflictInfo}
       onPointerDown={onBodyPointerDown}
       onClick={(e) => e.stopPropagation()}
-      style={{ left, width, borderLeftColor: staff?.color }}
+      style={{ left, width, borderLeftColor: conflict ? undefined : staff?.color, paddingRight: intervalPx > 0 ? intervalPx + 6 : undefined }}
       className={cn(
         sharedClass,
         "flex flex-col border-border",
         palette.tint,
-        r.status === "ARRIVED" && "ring-1 ring-primary/50",
-        r.status === "DONE" && "ring-1 ring-emerald-300",
-        isNew && "ring-2 ring-rose-300"
+        !conflict && r.status === "ARRIVED" && "ring-1 ring-primary/50",
+        !conflict && r.status === "DONE" && "ring-1 ring-emerald-300",
+        !conflict && isNew && "ring-2 ring-rose-300"
       )}
     >
+      {intervalBand}
+
       {isNew && (
-        <span className="absolute right-0 top-0 z-10 rounded-bl-md bg-rose-500 px-1 py-px text-[8px] font-bold leading-none text-white shadow-sm">
+        <span className="absolute right-0 top-0 z-20 rounded-bl-md bg-rose-500 px-1 py-px text-[8px] font-bold leading-none text-white shadow-sm">
           NEW
         </span>
       )}
@@ -171,6 +199,12 @@ export function ReservationBlock({
         <span className="text-[10px] font-medium tabular-nums text-foreground/70">
           {minToLabel(r.start)}
         </span>
+        {conflict && (
+          <span className="inline-flex items-center gap-0.5 rounded bg-rose-100 px-1 py-px text-[9px] font-bold text-rose-700">
+            <AlertTriangle className="h-2.5 w-2.5" />
+            重複
+          </span>
+        )}
         {r.status === "ARRIVED" && (
           <span className="rounded bg-primary/12 px-1 py-px text-[9px] font-medium text-primary">
             来店中

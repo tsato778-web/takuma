@@ -33,6 +33,8 @@ import {
   SEED_RESERVATIONS,
   CURRENT_USER,
   dateKey,
+  occupiesSlot,
+  blockTitle,
   type Reservation,
 } from "@/lib/mock-data";
 
@@ -90,6 +92,29 @@ export function ReservationBoard() {
       unpaid: inService.filter((r) => !r.paid).length,
       noChart: inService.filter((r) => !r.hasChart).length,
     };
+  }, [dayReservations]);
+
+  // ---- 二重予約(重複)検出: 同一スタッフで占有時間が重なる枠 ----
+  const { conflictIds, conflictInfo } = React.useMemo(() => {
+    const ids = new Set<string>();
+    const info: Record<string, string> = {};
+    const active = dayReservations.filter(occupiesSlot);
+    const add = (id: string, other: Reservation) => {
+      const desc = `${blockTitle(other)} ${minToLabel(other.start)}–${minToLabel(other.end)}`;
+      info[id] = info[id] ? `${info[id]}\n${desc}` : `重複: ${desc}`;
+      ids.add(id);
+    };
+    for (let i = 0; i < active.length; i++) {
+      for (let j = i + 1; j < active.length; j++) {
+        const a = active[i];
+        const b = active[j];
+        if (a.staffId === b.staffId && a.start < b.end && b.start < a.end) {
+          add(a.id, b);
+          add(b.id, a);
+        }
+      }
+    }
+    return { conflictIds: ids, conflictInfo: info };
   }, [dayReservations]);
 
   // ---- 日毎メモ (store_id + 日付 + 可視性で絞り込み) ----
@@ -399,6 +424,8 @@ export function ReservationBoard() {
                     pxPerMin={pxPerMin}
                     dragging={preview?.id === r.id}
                     highlight={highlightId === r.id}
+                    conflict={conflictIds.has(r.id)}
+                    conflictInfo={conflictInfo[r.id]}
                     onBodyPointerDown={(e) => startDrag(e, r, "move")}
                     onResizePointerDown={(e) => startDrag(e, r, "resize")}
                   />
@@ -414,6 +441,7 @@ export function ReservationBoard() {
         onOpenChange={setCreateOpen}
         prefill={prefill}
         dateKey={dk}
+        daySlots={dayReservations}
         onCreate={handleCreate}
       />
       <ReservationDetailDialog

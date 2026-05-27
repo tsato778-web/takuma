@@ -65,10 +65,18 @@ export interface Menu {
   id: string;
   storeId: string;
   name: string;
-  durationMin: number;
+  durationMin: number; // 施術時間 (売上・コース表示はこちらを使用)
+  intervalMin: number; // 施術後のインターバル/準備時間 (台帳占有のみ)
   price: number;
   color: MenuColor;
 }
+
+// 店舗設定。メニュー個別にインターバル未設定の場合はこの既定値を使用
+export const STORE_SETTINGS = {
+  defaultIntervalMin: 0,
+};
+
+export const INTERVAL_OPTIONS = [0, 5, 10, 15, 30];
 
 // 枠の種別。RESERVATION のみ顧客を伴う。他は「予約不可枠」(ダークアウト表示)
 export type BlockKind = "RESERVATION" | "BREAK" | "MEETING" | "BLOCK" | "OTHER";
@@ -83,7 +91,8 @@ export interface Reservation {
   menuIds: string[];
   label?: string; // 予約以外の表示ラベル(その他/メモ)
   start: number; // 0時からの分
-  end: number;
+  end: number; // 占有終了 (= 施術 + インターバル)
+  intervalMin: number; // 末尾のインターバル/準備時間 (台帳占有のみ・売上には含めない)
   status: ReservationStatus;
   cancelType?: CancelType; // status=CANCELED のとき種別を保持 (KPI用)
   source: ReservationSource;
@@ -114,12 +123,12 @@ export const STAFF: Staff[] = [
 ];
 
 export const MENUS: Menu[] = [
-  { id: "menu_cut", storeId: STORE.id, name: "カット", durationMin: 60, price: 4400, color: "blue" },
-  { id: "menu_color", storeId: STORE.id, name: "カラー", durationMin: 90, price: 6600, color: "purple" },
-  { id: "menu_perm", storeId: STORE.id, name: "パーマ", durationMin: 120, price: 8800, color: "amber" },
-  { id: "menu_treat", storeId: STORE.id, name: "トリートメント", durationMin: 30, price: 3300, color: "teal" },
-  { id: "menu_spa", storeId: STORE.id, name: "ヘッドスパ", durationMin: 45, price: 5500, color: "green" },
-  { id: "menu_face", storeId: STORE.id, name: "フェイシャル", durationMin: 60, price: 9900, color: "pink" },
+  { id: "menu_cut", storeId: STORE.id, name: "カット", durationMin: 60, intervalMin: 0, price: 4400, color: "blue" },
+  { id: "menu_color", storeId: STORE.id, name: "カラー", durationMin: 90, intervalMin: 15, price: 6600, color: "purple" },
+  { id: "menu_perm", storeId: STORE.id, name: "パーマ", durationMin: 120, intervalMin: 15, price: 8800, color: "amber" },
+  { id: "menu_treat", storeId: STORE.id, name: "トリートメント", durationMin: 30, intervalMin: 0, price: 3300, color: "teal" },
+  { id: "menu_spa", storeId: STORE.id, name: "ヘッドスパ", durationMin: 45, intervalMin: 10, price: 5500, color: "green" },
+  { id: "menu_face", storeId: STORE.id, name: "フェイシャル", durationMin: 60, intervalMin: 10, price: 9900, color: "pink" },
 ];
 
 export const CUSTOMERS: Customer[] = [
@@ -151,6 +160,7 @@ function buildSeed(): Reservation[] {
     dateKey: today,
     kind: "RESERVATION",
     menuIds: [],
+    intervalMin: 0,
     status: "CONFIRMED",
     source: "MANUAL",
     isNominated: false,
@@ -159,14 +169,16 @@ function buildSeed(): Reservation[] {
     ...o,
   });
   return [
-    R({ id: "r1", customerId: "cus_yamada", staffId: "stf_tanaka", menuIds: ["menu_cut", "menu_color"], start: 10 * 60, end: 10 * 60 + 150, status: "ARRIVED", source: "LINE", isNominated: true }),
+    R({ id: "r1", customerId: "cus_yamada", staffId: "stf_tanaka", menuIds: ["menu_cut", "menu_color"], start: 10 * 60, end: 10 * 60 + 165, intervalMin: 15, status: "ARRIVED", source: "LINE", isNominated: true }),
     R({ id: "r2", customerId: "cus_takahashi", staffId: "stf_sato", menuIds: ["menu_cut"], start: 10 * 60 + 30, end: 10 * 60 + 90, source: "PHONE" }),
-    R({ id: "r3", customerId: "cus_ito", staffId: "stf_suzuki", menuIds: ["menu_face"], start: 12 * 60 + 30, end: 13 * 60 + 30, source: "WALK_IN" }),
-    R({ id: "r4", customerId: "cus_nakamura", staffId: "stf_tanaka", menuIds: ["menu_spa"], start: 13 * 60, end: 13 * 60 + 45, status: "DONE", source: "LINE", hasChart: true }),
+    R({ id: "r3", customerId: "cus_ito", staffId: "stf_suzuki", menuIds: ["menu_face"], start: 12 * 60 + 30, end: 13 * 60 + 40, intervalMin: 10, source: "WALK_IN" }),
+    R({ id: "r4", customerId: "cus_nakamura", staffId: "stf_tanaka", menuIds: ["menu_spa"], start: 13 * 60, end: 13 * 60 + 55, intervalMin: 10, status: "DONE", source: "LINE", hasChart: true }),
     R({ id: "r5", customerId: "cus_kobayashi", staffId: "stf_takahashi", menuIds: ["menu_treat"], start: 11 * 60, end: 11 * 60 + 30, status: "DONE", paid: true, hasChart: true }),
-    R({ id: "r6", customerId: "cus_kato", staffId: "stf_suzuki", menuIds: ["menu_perm"], start: 14 * 60 + 30, end: 16 * 60 + 30, source: "LINE", isNominated: true }),
-    R({ id: "r7", customerId: "cus_saito", staffId: "stf_sato", menuIds: ["menu_color"], start: 15 * 60, end: 16 * 60 + 30, source: "PHONE" }),
-    R({ id: "r8", customerId: "cus_watanabe", staffId: "stf_tanaka", menuIds: ["menu_face"], start: 16 * 60, end: 17 * 60, source: "WALK_IN" }),
+    R({ id: "r6", customerId: "cus_kato", staffId: "stf_suzuki", menuIds: ["menu_perm"], start: 14 * 60 + 30, end: 16 * 60 + 45, intervalMin: 15, source: "LINE", isNominated: true }),
+    R({ id: "r7", customerId: "cus_saito", staffId: "stf_sato", menuIds: ["menu_color"], start: 15 * 60, end: 16 * 60 + 45, intervalMin: 15, source: "PHONE" }),
+    R({ id: "r8", customerId: "cus_watanabe", staffId: "stf_tanaka", menuIds: ["menu_face"], start: 16 * 60, end: 17 * 60 + 10, intervalMin: 10, source: "WALK_IN" }),
+    // 重複(ダブルブッキング)のサンプル: 鈴木の r3 と時間が重なる
+    R({ id: "r9", customerId: "cus_takahashi", staffId: "stf_suzuki", menuIds: ["menu_cut"], start: 13 * 60, end: 14 * 60, source: "MANUAL" }),
     // キャンセル履歴のサンプル(当日キャンセル)
     R({ id: "rc1", customerId: "cus_kobayashi", staffId: "stf_sato", menuIds: ["menu_spa"], start: 13 * 60 + 30, end: 14 * 60 + 15, status: "CANCELED", cancelType: "SAME_DAY", source: "LINE" }),
     // 予約不可枠(ダークアウト)のサンプル
@@ -204,6 +216,32 @@ export const reservationColor = (r: Reservation): MenuColor =>
 
 // 顧客予約画面(◯×)での枠占有判定。キャンセルは空き枠として再解放する
 export const occupiesSlot = (r: Reservation): boolean => r.status !== "CANCELED";
+
+// 施術本体の終了時刻 (占有終了 - インターバル)
+export const serviceEndOf = (r: Reservation): number => r.end - (r.intervalMin ?? 0);
+
+// 選択メニューからインターバルを推定 (最大値・未設定は店舗既定)
+export function suggestedInterval(menuIds: string[]): number {
+  const vals = menuIds.map((id) => menuById(id)?.intervalMin ?? STORE_SETTINGS.defaultIntervalMin);
+  return vals.length ? Math.max(...vals) : STORE_SETTINGS.defaultIntervalMin;
+}
+
+// 2枠が同一スタッフで時間的に重複しているか (占有時間=インターバル込みで判定)
+export function slotsOverlap(a: Reservation, b: Reservation): boolean {
+  return (
+    a.id !== b.id &&
+    a.staffId === b.staffId &&
+    occupiesSlot(a) &&
+    occupiesSlot(b) &&
+    a.start < b.end &&
+    b.start < a.end
+  );
+}
+
+// target と重複する既存枠を返す (二重予約の警告に使用)。お客様側は重複不可、管理画面は警告付きで許可
+export function findConflicts(target: Reservation, slots: Reservation[]): Reservation[] {
+  return slots.filter((s) => slotsOverlap(target, s));
+}
 
 // 枠のタイトル表示(予約は顧客名、それ以外は種別ラベル/カスタムラベル)
 export function blockTitle(r: Reservation): string {

@@ -146,6 +146,11 @@ export function ReservationDetailDialog({ reservation: r, onOpenChange, onUpdate
                   LINE未追加
                 </span>
               )}
+              {r.intervalMin > 0 && (
+                <span className="inline-flex items-center gap-1 rounded border border-dashed border-border px-2 py-0.5 text-[11px] text-muted-foreground">
+                  施術{r.end - r.start - r.intervalMin}分 ＋ 準備{r.intervalMin}分
+                </span>
+              )}
             </div>
 
             {canceled ? (
