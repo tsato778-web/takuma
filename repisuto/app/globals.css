@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* 美容クリニック風: 落ち着いた寒色ニュートラル + 上品なティールアクセント */
+    --background: 210 30% 98%;
+    --foreground: 215 25% 22%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 22%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 22%;
+
+    --primary: 191 70% 38%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 200 30% 95%;
+    --secondary-foreground: 215 25% 28%;
+
+    --muted: 210 24% 95%;
+    --muted-foreground: 215 16% 50%;
+
+    --accent: 168 55% 42%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 56%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 24% 90%;
+    --input: 214 24% 88%;
+    --ring: 191 70% 42%;
+
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "palt";
+  }
+}
+
+/* 予約台帳のグリッド線(背景) */
+.board-grid-bg {
+  background-image:
+    repeating-linear-gradient(
+      to right,
+      hsl(var(--border) / 0.7) 0,
+      hsl(var(--border) / 0.7) 1px,
+      transparent 1px,
+      transparent var(--slot-px)
+    );
+}
+
+/* 細いスクロールバー */
+.thin-scrollbar::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 9999px;
+}
+.thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
