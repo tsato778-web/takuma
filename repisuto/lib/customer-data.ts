@@ -3,7 +3,7 @@
 
 import { MENUS, STAFF, type Customer } from "./mock-data";
 
-const TODAY = "2026-05-27";
+export const TODAY = "2026-05-27";
 
 function seeded(key: string): () => number {
   let h = 2166136261;
@@ -69,6 +69,7 @@ export interface VisitRecord {
   id: string;
   date: string;
   menus: string;
+  staffId: string;
   staffName: string;
   amount: number;
   nominated: boolean;
@@ -86,11 +87,13 @@ export function visitHistory(c: Customer): VisitRecord[] {
     const sub = MENUS[Math.floor(rnd() * MENUS.length)];
     const menus = withSub && sub.id !== main.id ? `${main.name} + ${sub.name}` : main.name;
     const amount = main.price + (withSub && sub.id !== main.id ? sub.price : 0);
-    const staff = STAFF[Math.floor(rnd() * STAFF.length)];
+    // 最新の来店は前回担当、それ以外は主担当寄りで自然に
+    const staff = i === 0 ? STAFF.find((s) => s.id === c.lastStaffId) ?? STAFF[0] : STAFF.find((s) => s.id === c.mainStaffId) ?? STAFF[0];
     records.push({
       id: `${c.id}-v${i}`,
       date: fmtISO(d),
       menus,
+      staffId: staff.id,
       staffName: staff.name,
       amount,
       nominated: rnd() < 0.5,
