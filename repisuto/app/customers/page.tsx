@@ -6,6 +6,7 @@ import { Search, Crown, AlertTriangle, Ticket as TicketIcon, ChevronRight, Users
 import {
   CUSTOMERS,
   MEDIA_OPTIONS,
+  STAFF,
   formatCustomerNo,
   ticketRemainingTotal,
   ticketStatus,
@@ -52,6 +53,33 @@ const ALL_TAGS = Array.from(
   new Set(CUSTOMERS.flatMap((c) => [...c.tags, ...c.messageTags]))
 );
 
+const STAFF_ROLES = [
+  { id: "any", label: "いずれかの担当" },
+  { id: "main", label: "主担当" },
+  { id: "first", label: "初回担当" },
+  { id: "last", label: "前回担当" },
+  { id: "next", label: "次回担当" },
+] as const;
+type StaffRole = (typeof STAFF_ROLES)[number]["id"];
+
+function matchesStaff(c: Customer, staffId: string, role: StaffRole): boolean {
+  if (!staffId) return true;
+  switch (role) {
+    case "main":
+      return c.mainStaffId === staffId;
+    case "first":
+      return c.firstStaffId === staffId;
+    case "last":
+      return c.lastStaffId === staffId;
+    case "next":
+      return c.mainStaffId === staffId; // 次回担当 = 主担当(継続想定)
+    default:
+      return (
+        c.mainStaffId === staffId || c.firstStaffId === staffId || c.lastStaffId === staffId
+      );
+  }
+}
+
 function lastVisitTs(c: Customer) {
   return new Date(c.lastVisitDate).getTime();
 }
@@ -66,6 +94,8 @@ export default function CustomersPage() {
   const [toggles, setToggles] = React.useState<Set<ToggleId>>(new Set());
   const [media, setMedia] = React.useState("");
   const [tag, setTag] = React.useState("");
+  const [staff, setStaff] = React.useState("");
+  const [staffRole, setStaffRole] = React.useState<StaffRole>("any");
 
   function toggle(id: ToggleId) {
     setToggles((prev) => {
@@ -115,6 +145,7 @@ export default function CustomersPage() {
       if (toggles.has("new") && !isNewCustomer(c)) return false;
       if (media && c.firstSource !== media) return false;
       if (tag && !c.tags.includes(tag) && !c.messageTags.includes(tag)) return false;
+      if (!matchesStaff(c, staff, staffRole)) return false;
       return true;
     });
 
@@ -135,7 +166,7 @@ export default function CustomersPage() {
       }
     });
     return arr;
-  }, [q, sort, toggles, media, tag]);
+  }, [q, sort, toggles, media, tag, staff, staffRole]);
 
   return (
     <div className="flex h-full flex-col">
@@ -203,6 +234,30 @@ export default function CustomersPage() {
               <option key={t} value={t}>{t}</option>
             ))}
           </select>
+          <select
+            value={staff}
+            onChange={(e) => setStaff(e.target.value)}
+            className={cn(
+              "h-8 rounded-full border bg-card px-3 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              staff ? "border-primary text-primary" : "border-border"
+            )}
+          >
+            <option value="">担当者（すべて）</option>
+            {STAFF.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+          {staff && (
+            <select
+              value={staffRole}
+              onChange={(e) => setStaffRole(e.target.value as StaffRole)}
+              className="h-8 rounded-full border border-border bg-card px-3 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {STAFF_ROLES.map((r) => (
+                <option key={r.id} value={r.id}>{r.label}</option>
+              ))}
+            </select>
+          )}
 
           <div className="ml-auto flex items-center gap-1.5">
             <span className="text-xs text-muted-foreground">並び替え</span>
