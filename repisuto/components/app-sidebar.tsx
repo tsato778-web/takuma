@@ -14,6 +14,10 @@ import {
   Link2,
   Database,
   UserCog,
+  CalendarClock,
+  CalendarRange,
+  ClipboardList,
+  MapPin,
   Plug,
   Wrench,
   Sparkles,
@@ -47,7 +51,7 @@ const NAV: NavItem[] = [
     label: "強制リンク作成",
     icon: Link2,
     children: [
-      { label: "リンク作成", href: "/links" },
+      { label: "リンク作成・一括作成", href: "/links" },
       { label: "個人情報入力テンプレート", href: "/links/personal-info" },
       { label: "確認画面テンプレート", href: "/links/confirm" },
       { label: "サンクスページテンプレート", href: "/links/thanks" },
@@ -55,6 +59,8 @@ const NAV: NavItem[] = [
       { label: "タグテンプレート", href: "/links/tags" },
     ],
   },
+  { label: "回答フォーム作成", icon: ClipboardList, href: "/forms" },
+  { label: "Googleマップ", icon: MapPin, href: "/google-business" },
   {
     label: "基本マスター",
     icon: Database,
@@ -71,22 +77,19 @@ const NAV: NavItem[] = [
       { label: "キャンセル理由マスター", href: "/master/cancel-reasons" },
     ],
   },
-  {
-    label: "スタッフ登録",
-    icon: UserCog,
-    children: [
-      { label: "スタッフマスター", href: "/staff" },
-      { label: "出勤表", href: "/staff/shifts" },
-      { label: "予約開放設定", href: "/staff/reservation-opening" },
-    ],
-  },
+  { label: "スタッフ登録", icon: UserCog, href: "/staff" },
+  { label: "出勤表", icon: CalendarRange, href: "/staff/shifts" },
+  { label: "予約開放設定", icon: CalendarClock, href: "/staff/reservation-opening" },
   { label: "外部連携", icon: Plug, href: "/integrations" },
   { label: "メンテナンス", icon: Wrench, href: "/maintenance" },
 ];
 
+const ALL_HREFS = NAV.flatMap((i) => (i.children ? i.children.map((c) => c.href) : [i.href!]));
+
 export function AppSidebar() {
   const pathname = usePathname();
-  const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
+  const best = ALL_HREFS.filter((h) => pathname === h || pathname.startsWith(h + "/")).sort((a, b) => b.length - a.length)[0];
+  const isActive = (href: string) => href === best;
 
   return (
     <aside className="flex w-[230px] shrink-0 flex-col border-r border-border bg-card">

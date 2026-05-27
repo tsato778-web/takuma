@@ -12,6 +12,7 @@ export default function StaffMasterPage() {
     "1",
     String(i + 1),
     "渋谷店",
+    <Chip key="rc" tone="ok">受付可</Chip>,
     <Chip key="st" tone="ok">在籍</Chip>,
   ]);
   // 退職（論理削除）の例
@@ -23,12 +24,13 @@ export default function StaffMasterPage() {
     "—",
     "—",
     "渋谷店",
+    <Chip key="rc" tone="muted">受付不可</Chip>,
     <Chip key="st" tone="muted">退職・非表示</Chip>,
   ]);
 
   return (
     <PageShell title="スタッフマスター" description="権限・対応メニュー・指名可否・表示順などを設定。削除は退職／非表示の論理削除です。" action={<AddButton label="スタッフ登録" />}>
-      <MasterTable columns={["スタッフ", "表示名", "権限", "指名", "受付可能数", "表示順", "所属店舗", "状態"]} rows={rows} />
+      <MasterTable columns={["スタッフ", "表示名", "権限", "指名", "受付可能数", "表示順", "所属店舗", "予約受付", "状態"]} rows={rows} />
       <div className="mt-4 rounded-xl border border-dashed border-border bg-secondary/20 p-4 text-xs text-muted-foreground">
         <div className="mb-1 font-semibold text-foreground">登録項目（モック）</div>
         スタッフ名 ／ 表示名 ／ 権限 ／ 対応メニュー ／ 指名可・不可 ／ 受付可能数 ／ 表示順 ／ 所属店舗 ／ Googleカレンダー連携 ／ 退職・非表示設定（論理削除）

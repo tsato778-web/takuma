@@ -31,6 +31,10 @@ function statusFor(staffIdx: number, date: Date): S {
   return "出";
 }
 
+function Tag({ children }: { children: React.ReactNode }) {
+  return <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground">{children}</span>;
+}
+
 export default function ShiftsPage() {
   const [month, setMonth] = React.useState(new Date(2026, 4, 1));
   const y = month.getFullYear();
@@ -62,6 +66,15 @@ export default function ShiftsPage() {
             </span>
           ))}
         </div>
+      </div>
+
+      {/* 上部一括調整 */}
+      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-secondary/30 px-3 py-2">
+        <span className="text-[11px] font-semibold text-muted-foreground">一括操作</span>
+        {["店舗一括公開", "スタッフ一括変更", "今月分を一括反映", "翌月へコピー"].map((b) => (
+          <span key={b} className="cursor-default rounded-md border border-border bg-card px-2.5 py-1 text-[11px] font-medium text-foreground/80 hover:bg-secondary">{b}</span>
+        ))}
+        <span className="ml-auto text-[11px] text-muted-foreground">店舗営業時間：10:00 - 20:00</span>
       </div>
 
       <div className="overflow-auto thin-scrollbar rounded-xl border border-border bg-card">
@@ -96,6 +109,30 @@ export default function ShiftsPage() {
           </tbody>
         </table>
       </div>
+      {/* 自動反映ルーチン(曜日ルール) */}
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="rounded-xl border border-border bg-card p-4">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">自動反映ルーチン（曜日ルール）</div>
+          <p className="mb-2 text-[11px] text-muted-foreground">スタッフごとに曜日ルールを設定すると、月全体に自動反映されます。</p>
+          <div className="space-y-1.5 text-sm">
+            <div className="flex items-center gap-2"><span className="w-14 font-medium">田中</span><span className="flex flex-wrap gap-1"><Tag>毎週月曜 休み</Tag><Tag>毎週金曜 休み</Tag><Tag>水曜 12:00-18:00</Tag></span></div>
+            <div className="flex items-center gap-2"><span className="w-14 font-medium">佐藤</span><span className="flex flex-wrap gap-1"><Tag>毎週火曜 休み</Tag><Tag>金曜 12:00-21:00</Tag></span></div>
+            <div className="flex items-center gap-2"><span className="w-14 font-medium">鈴木</span><span className="flex flex-wrap gap-1"><Tag>毎週水曜 休み</Tag></span></div>
+          </div>
+          <span className="mt-3 inline-flex cursor-default items-center gap-1 rounded-md border border-border px-2.5 py-1 text-[11px] font-medium hover:bg-secondary">＋ 曜日ルールを追加</span>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">勤務時間のカスタマイズ</div>
+          <p className="mb-2 text-[11px] text-muted-foreground">店舗営業時間を土台に、日・曜日・スタッフ単位で勤務時間を変更できます。</p>
+          <div className="space-y-1 text-sm">
+            <div className="flex justify-between border-b border-border/50 py-1"><span className="text-muted-foreground">店舗営業時間</span><span className="font-medium tabular-nums">10:00 - 20:00</span></div>
+            <div className="flex justify-between border-b border-border/50 py-1"><span className="text-muted-foreground">田中（月曜）</span><span className="tabular-nums">10:00 - 18:00</span></div>
+            <div className="flex justify-between border-b border-border/50 py-1"><span className="text-muted-foreground">佐藤（金曜）</span><span className="tabular-nums">12:00 - 21:00</span></div>
+            <div className="flex justify-between py-1"><span className="text-muted-foreground">高橋（水曜）</span><span className="tabular-nums">休み</span></div>
+          </div>
+        </div>
+      </div>
+
       <p className="mt-3 text-[11px] text-muted-foreground">※ モックUIです。出勤していないスタッフは予約受付不可、台帳の表示スタッフからも自動で外れます（スタッフ一括変更にも対応予定）。</p>
     </PageShell>
   );
