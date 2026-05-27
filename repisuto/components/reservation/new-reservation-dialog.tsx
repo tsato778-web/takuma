@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Clock, AlertTriangle } from "lucide-react";
+import { Clock, AlertTriangle, UserPlus, Search, Send } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import {
@@ -22,14 +22,19 @@ import {
   STAFF,
   STORE,
   INTERVAL_OPTIONS,
+  MEDIA_OPTIONS,
   menuById,
   staffById,
   staffHandlesMenu,
   blockTitle,
   suggestedInterval,
   findConflicts,
+  customersByPhone,
+  createCustomer,
+  formatCustomerNo,
   type BlockKind,
   type Reservation,
+  type Assignment,
 } from "@/lib/mock-data";
 
 interface Props {
@@ -77,6 +82,12 @@ export function NewReservationDialog({
   const [pending, setPending] = React.useState<{ r: Reservation; conflicts: Reservation[] } | null>(
     null
   );
+  // 新規顧客(電話予約)
+  const [custMode, setCustMode] = React.useState<"existing" | "new">("existing");
+  const [nc, setNc] = React.useState({ name: "", kana: "", phone: "", email: "", source: MEDIA_OPTIONS[0], notify: true });
+  // メニュー別担当割り当て
+  const [menuStaff, setMenuStaff] = React.useState<Record<string, string>>({});
+  const [assists, setAssists] = React.useState<string[]>([]);
 
   React.useEffect(() => {
     if (open) {
@@ -90,8 +101,25 @@ export function NewReservationDialog({
       setLabel("");
       setIntervalMin(0);
       setPending(null);
+      setCustMode("existing");
+      setNc({ name: "", kana: "", phone: "", email: "", source: MEDIA_OPTIONS[0], notify: true });
+      setMenuStaff({});
+      setAssists([]);
     }
   }, [open, prefill]);
+
+  const dupCandidates = custMode === "new" ? customersByPhone(nc.phone) : [];
+  const splitAssign = kind === "RESERVATION" && menuIds.length >= 2;
+  const menuStaffOf = (mid: string) => menuStaff[mid] ?? staffId;
+  const menuSlots = (() => {
+    let t = start;
+    return menuIds.map((mid) => {
+      const d = menuById(mid)?.durationMin ?? 30;
+      const s0 = t;
+      t += d;
+      return { mid, s0, e0: t };
+    });
+  })();
 
   // メニュー変更時にインターバルを推定値へ追従
   React.useEffect(() => {
@@ -104,31 +132,59 @@ export function NewReservationDialog({
   const occupancy = serviceDuration + effInterval;
   const end = Math.min(start + occupancy, CLOSE_MIN);
   const totalPrice = menuIds.reduce((s, id) => s + (menuById(id)?.price ?? 0), 0);
-  const canSave = isReservation ? !!customerId && menuIds.length > 0 : true;
+  const customerOk = custMode === "new" ? nc.name.trim() !== "" && nc.phone.trim() !== "" : !!customerId;
+  const canSave = isReservation ? customerOk && menuIds.length > 0 : true;
 
   function toggleMenu(id: string) {
     setMenuIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
-  function buildReservation(): Reservation {
+  // メニュー別 担当割り当て (2メニュー以上で有効)
+  function buildAssignments(): Assignment[] | undefined {
+    if (!splitAssign) return undefined;
+    let t = start;
+    const out: Assignment[] = [];
+    menuIds.forEach((mid, i) => {
+      const m = menuById(mid);
+      const dur = m?.durationMin ?? 30;
+      out.push({ staffId: menuStaffOf(mid), role: i === 0 ? "MAIN" : "SUB", label: m?.name ?? "", start: t, end: t + dur, share: i === 0 ? 1 : 0 });
+      t += dur;
+    });
+    assists.forEach((sid) => out.push({ staffId: sid, role: "ASSIST", label: "補助", start, end: t }));
+    return out;
+  }
+
+  function buildReservation(custId: string | undefined): Reservation {
+    const assignments = buildAssignments();
+    const mainStaff = assignments ? assignments[0].staffId : staffId;
     return {
       id: `s${Date.now()}`,
       storeId: STORE.id,
       dateKey,
       kind,
-      customerId: isReservation ? customerId ?? undefined : undefined,
-      staffId,
+      customerId: isReservation ? custId : undefined,
+      staffId: mainStaff,
       menuIds: isReservation ? menuIds : [],
       label: kind === "OTHER" ? label.trim() || undefined : undefined,
       start,
       end,
       intervalMin: effInterval,
       status: "CONFIRMED",
-      source: "MANUAL",
+      source: custMode === "new" ? "PHONE" : "MANUAL",
       isNominated: isReservation ? nominated : false,
       paid: false,
       hasChart: false,
+      assignments,
     };
+  }
+
+  function resolveCustomerId(): string | undefined {
+    if (!isReservation) return undefined;
+    if (custMode === "new") {
+      const c = createCustomer({ name: nc.name.trim(), kana: nc.kana.trim(), phone: nc.phone.trim(), firstSource: nc.source, staffId, dateKey });
+      return c.id;
+    }
+    return customerId ?? undefined;
   }
 
   function commit(r: Reservation) {
@@ -138,10 +194,11 @@ export function NewReservationDialog({
 
   function handleSave() {
     if (!canSave) return;
-    const r = buildReservation();
+    const custId = resolveCustomerId();
+    const r = buildReservation(custId);
     const conflicts = findConflicts(r, daySlots);
     if (conflicts.length > 0) {
-      setPending({ r, conflicts }); // 重複あり → 警告モーダル
+      setPending({ r, conflicts });
       return;
     }
     commit(r);
@@ -186,8 +243,44 @@ export function NewReservationDialog({
             {isReservation && (
               <>
                 <div className="space-y-1.5">
-                  <Label>顧客</Label>
-                  <CustomerCombobox value={customerId} onChange={setCustomerId} />
+                  <div className="flex items-center justify-between">
+                    <Label>顧客</Label>
+                    <div className="flex overflow-hidden rounded-md border border-border text-[11px]">
+                      <button type="button" onClick={() => setCustMode("existing")} className={cn("flex items-center gap-1 px-2 py-1 font-medium", custMode === "existing" ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground")}><Search className="h-3 w-3" />既存顧客</button>
+                      <button type="button" onClick={() => setCustMode("new")} className={cn("flex items-center gap-1 px-2 py-1 font-medium", custMode === "new" ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground")}><UserPlus className="h-3 w-3" />新規顧客として予約</button>
+                    </div>
+                  </div>
+
+                  {custMode === "existing" ? (
+                    <CustomerCombobox value={customerId} onChange={setCustomerId} />
+                  ) : (
+                    <div className="space-y-2 rounded-lg border border-border bg-secondary/20 p-3">
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input placeholder="氏名（必須）" value={nc.name} onChange={(e) => setNc((s) => ({ ...s, name: e.target.value }))} />
+                        <Input placeholder="カナ" value={nc.kana} onChange={(e) => setNc((s) => ({ ...s, kana: e.target.value }))} />
+                        <Input placeholder="電話番号（必須）" value={nc.phone} onChange={(e) => setNc((s) => ({ ...s, phone: e.target.value }))} />
+                        <Input placeholder="メールアドレス" value={nc.email} onChange={(e) => setNc((s) => ({ ...s, email: e.target.value }))} />
+                        <select value={nc.source} onChange={(e) => setNc((s) => ({ ...s, source: e.target.value }))} className="h-9 rounded-md border border-input bg-card px-2 text-sm">
+                          {MEDIA_OPTIONS.map((m) => <option key={m} value={m}>{m}（流入経路）</option>)}
+                        </select>
+                      </div>
+                      {dupCandidates.length > 0 && (
+                        <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-[11px]">
+                          <div className="mb-1 flex items-center gap-1 font-medium text-amber-800"><AlertTriangle className="h-3 w-3" />既存顧客の可能性があります</div>
+                          {dupCandidates.map((c) => (
+                            <button key={c.id} type="button" onClick={() => { setCustMode("existing"); setCustomerId(c.id); }} className="flex w-full items-center justify-between rounded px-1.5 py-1 hover:bg-amber-100">
+                              <span>No.{formatCustomerNo(c.customerNo)} {c.name}（{c.phone}）</span>
+                              <span className="font-medium text-amber-700">この顧客に紐付ける →</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <input type="checkbox" checked={nc.notify} onChange={(e) => setNc((s) => ({ ...s, notify: e.target.checked }))} className="h-3.5 w-3.5 accent-primary" />
+                        <Send className="h-3 w-3" />予約完了通知＋問診票URLを電話番号宛に送信（SMS/LINE/メール・モック）
+                      </label>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -220,6 +313,40 @@ export function NewReservationDialog({
                   </div>
                   <p className="text-[10px] text-muted-foreground">担当が対応できないメニューは選択できません。</p>
                 </div>
+
+                {splitAssign && (
+                  <div className="space-y-1.5">
+                    <Label>担当割り当て（メニュー別）</Label>
+                    <div className="space-y-1.5 rounded-lg border border-border p-2">
+                      {menuSlots.map(({ mid, s0, e0 }, i) => {
+                        const m = menuById(mid);
+                        return (
+                          <div key={mid} className="flex items-center gap-2 text-xs">
+                            <span className="w-24 shrink-0 tabular-nums text-muted-foreground">{minToLabel(s0)}-{minToLabel(e0)}</span>
+                            <span className="w-16 shrink-0 font-medium">{m?.name}</span>
+                            <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium", i === 0 ? "bg-primary/10 text-primary" : "bg-accent/12 text-accent")}>{i === 0 ? "主担当" : "サブ担当"}</span>
+                            <select value={menuStaffOf(mid)} onChange={(e) => setMenuStaff((p) => ({ ...p, [mid]: e.target.value }))} className="h-8 flex-1 rounded-md border border-input bg-card px-2 text-xs">
+                              {STAFF.filter((s) => staffHandlesMenu(s.id, mid)).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                          </div>
+                        );
+                      })}
+                      {assists.map((sid, idx) => (
+                        <div key={idx} className="flex items-center gap-2 text-xs">
+                          <span className="w-24 shrink-0 tabular-nums text-muted-foreground">{minToLabel(start)}-{minToLabel(menuSlots[menuSlots.length - 1]?.e0 ?? start)}</span>
+                          <span className="w-16 shrink-0 font-medium">補助</span>
+                          <span className="shrink-0 rounded bg-secondary px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">補助</span>
+                          <select value={sid} onChange={(e) => setAssists((a) => a.map((x, j) => (j === idx ? e.target.value : x)))} className="h-8 flex-1 rounded-md border border-input bg-card px-2 text-xs">
+                            {STAFF.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                          </select>
+                          <button type="button" onClick={() => setAssists((a) => a.filter((_, j) => j !== idx))} className="text-muted-foreground hover:text-rose-600">×</button>
+                        </div>
+                      ))}
+                      <button type="button" onClick={() => setAssists((a) => [...a, STAFF[3].id])} className="text-[11px] font-medium text-primary hover:underline">＋ 補助担当を追加</button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">メニューごとに担当を割り当てると、台帳に担当別ブロックで表示され、会計の売上配分にも連動します。</p>
+                  </div>
+                )}
               </>
             )}
 

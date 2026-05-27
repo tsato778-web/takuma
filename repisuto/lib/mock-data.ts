@@ -38,9 +38,12 @@ export interface Store {
 export interface Staff {
   id: string;
   storeId: string;
+  staffNo: string; // 社員番号(システム全体で一意・退職後も保持) 例 S0001
   name: string;
+  kana: string;
   color: string; // 予約台帳の色 (hex)
   acceptsNomination: boolean;
+  active: boolean; // 在籍(false=退職・非表示)
   menuIds: string[]; // 対応可能メニュー (空=全対応)
 }
 
@@ -154,11 +157,17 @@ export const STORES: Store[] = [
 ];
 
 export const STAFF: Staff[] = [
-  { id: "stf_tanaka", storeId: STORE.id, name: "田中 美咲", color: "#0ea5b7", acceptsNomination: true, menuIds: ["menu_cut", "menu_color", "menu_perm", "menu_treat", "menu_spa", "menu_face"] },
-  { id: "stf_sato", storeId: STORE.id, name: "佐藤 健", color: "#7c6df2", acceptsNomination: true, menuIds: ["menu_cut", "menu_color", "menu_perm", "menu_treat"] },
-  { id: "stf_suzuki", storeId: STORE.id, name: "鈴木 葵", color: "#e8739a", acceptsNomination: true, menuIds: ["menu_cut", "menu_color", "menu_treat", "menu_spa", "menu_face"] },
-  { id: "stf_takahashi", storeId: STORE.id, name: "高橋 涼", color: "#f0a13b", acceptsNomination: false, menuIds: ["menu_cut", "menu_treat", "menu_spa"] },
+  { id: "stf_tanaka", storeId: STORE.id, staffNo: "S0001", name: "田中 美咲", kana: "タナカ ミサキ", color: "#0ea5b7", acceptsNomination: true, active: true, menuIds: ["menu_cut", "menu_color", "menu_perm", "menu_treat", "menu_spa", "menu_face"] },
+  { id: "stf_sato", storeId: STORE.id, staffNo: "S0002", name: "佐藤 健", kana: "サトウ ケン", color: "#7c6df2", acceptsNomination: true, active: true, menuIds: ["menu_cut", "menu_color", "menu_perm", "menu_treat"] },
+  { id: "stf_suzuki", storeId: STORE.id, staffNo: "S0003", name: "鈴木 葵", kana: "スズキ アオイ", color: "#e8739a", acceptsNomination: true, active: true, menuIds: ["menu_cut", "menu_color", "menu_treat", "menu_spa", "menu_face"] },
+  { id: "stf_takahashi", storeId: STORE.id, staffNo: "S0004", name: "高橋 涼", kana: "タカハシ リョウ", color: "#f0a13b", acceptsNomination: false, active: true, menuIds: ["menu_cut", "menu_treat", "menu_spa"] },
 ];
+
+let staffSeq = STAFF.length;
+export function nextStaffNo(): string {
+  staffSeq += 1;
+  return `S${String(staffSeq).padStart(4, "0")}`;
+}
 
 export const MENUS: Menu[] = [
   { id: "menu_cut", storeId: STORE.id, name: "カット", durationMin: 60, intervalMin: 0, price: 4400, color: "blue" },
@@ -182,6 +191,44 @@ export const CUSTOMERS: Customer[] = [
 
 export function formatCustomerNo(no: number): string {
   return String(no).padStart(4, "0");
+}
+
+// 電話番号で既存顧客を検索 (新規予約時の重複チェック)
+export function customersByPhone(phone: string): Customer[] {
+  const norm = phone.replace(/[^0-9]/g, "");
+  if (norm.length < 6) return [];
+  return CUSTOMERS.filter((c) => c.phone.replace(/[^0-9]/g, "") === norm);
+}
+
+// 電話予約などで新規顧客を作成 (モック: 共有配列へ追加)
+export function createCustomer(p: { name: string; kana?: string; phone: string; firstSource?: string; staffId: string; dateKey: string }): Customer {
+  const no = Math.max(0, ...CUSTOMERS.map((c) => c.customerNo)) + 1;
+  const src = p.firstSource || "電話";
+  const c: Customer = {
+    id: `cus${Date.now()}`,
+    storeId: STORE.id,
+    customerNo: no,
+    name: p.name,
+    kana: p.kana || "",
+    phone: p.phone,
+    gender: "F",
+    firstSource: src,
+    registerMedia: "電話予約",
+    funnel: `${src} → 電話予約`,
+    tags: ["新規"],
+    messageTags: [],
+    ltv: 0,
+    lastVisitDate: p.dateKey,
+    mainStaffId: p.staffId,
+    firstStaffId: p.staffId,
+    lastStaffId: p.staffId,
+    monthlyMember: { active: false },
+    lineLinked: false,
+    tickets: [],
+    visitCount: 0,
+  };
+  CUSTOMERS.push(c);
+  return c;
 }
 
 export function dateKey(d: Date): string {

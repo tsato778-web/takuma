@@ -316,8 +316,9 @@ function CheckoutBody({ reservation: r, onComplete, onClose }: { reservation: Re
                 <div key={i} className="flex items-center gap-2 text-sm">
                   <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: staffById(a.staffId)?.color }} />
                   <span className="min-w-0 flex-1 truncate">{staffById(a.staffId)?.name} <span className="text-[11px] text-muted-foreground">{a.role === "MAIN" ? "主担当" : a.role === "SUB" ? a.label : "補助"}</span></span>
-                  <input type="number" value={shares[i] ?? 0} onChange={(e) => setShares((s) => s.map((v, j) => (j === i ? Math.max(0, Number(e.target.value) || 0) : v)))} className="h-7 w-16 rounded-md border border-input bg-card px-2 text-right text-xs tabular-nums" />
+                  <input type="number" value={shares[i] ?? 0} onChange={(e) => setShares((s) => s.map((v, j) => (j === i ? Math.max(0, Number(e.target.value) || 0) : v)))} className="h-7 w-14 rounded-md border border-input bg-card px-2 text-right text-xs tabular-nums" />
                   <span className="text-xs text-muted-foreground">%</span>
+                  <button onClick={() => setShares((s) => s.map((_, j) => (j === i ? 100 : 0)))} className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-secondary">100%計上</button>
                 </div>
               ))}
               {shareSum !== 100 && <p className="flex items-center gap-1 text-[11px] text-rose-600"><AlertTriangle className="h-3 w-3" />配分合計が100%になっていません</p>}

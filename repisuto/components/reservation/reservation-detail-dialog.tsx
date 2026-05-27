@@ -12,6 +12,7 @@ import {
   Ban,
   Sparkles,
   RotateCcw,
+  Pencil,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -204,14 +205,27 @@ export function ReservationDetailDialog({ reservation: r, onOpenChange, onUpdate
             ) : (
               <div className="space-y-3 pt-1">
                 {/* 受付高速化: 会計だけで「来店済→会計済」を一括処理 */}
-                <Button
-                  className="w-full"
-                  disabled={r.paid}
-                  onClick={() => (onCheckout ? onCheckout(r.id) : onUpdate(r.id, { status: "DONE", paid: true }))}
-                >
-                  <Wallet className="h-4 w-4" />
-                  {r.paid ? "会計済み" : "会計する（自動で来店済に）"}
-                </Button>
+                {r.paid ? (
+                  <div className="space-y-1.5">
+                    <div className="flex gap-2">
+                      <div className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-emerald-50 py-2 text-sm font-semibold text-emerald-700">
+                        <Wallet className="h-4 w-4" /> 会計済み
+                      </div>
+                      <Button variant="outline" className="flex-1" onClick={() => onCheckout?.(r.id)}>
+                        <Pencil className="h-4 w-4" /> 会計を修正
+                      </Button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">※ 修正は履歴に記録されます（誰が・いつ・修正前/後）。売上締め後は責任者権限のみ。</p>
+                  </div>
+                ) : (
+                  <Button
+                    className="w-full"
+                    onClick={() => (onCheckout ? onCheckout(r.id) : onUpdate(r.id, { status: "DONE", paid: true }))}
+                  >
+                    <Wallet className="h-4 w-4" />
+                    会計する（自動で来店済に）
+                  </Button>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   <Button
                     variant="outline"

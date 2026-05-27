@@ -285,6 +285,29 @@ export function ReservationBoard() {
 
   const detailRes = detailId ? reservations.find((r) => r.id === detailId) ?? null : null;
 
+  // スタッフの当日稼働(予約件数・稼働率)。分母=勤務時間−休憩/ブロック/会議
+  function staffDayStats(staffId: string) {
+    let booked = 0;
+    let blockMin = 0;
+    const ids = new Set<string>();
+    for (const r of dayReservations) {
+      if (r.kind !== "RESERVATION") {
+        if (r.staffId === staffId) blockMin += r.end - r.start;
+        continue;
+      }
+      if (r.status === "CANCELED") continue;
+      if (r.assignments && r.assignments.length) {
+        for (const a of r.assignments) if (a.staffId === staffId) { booked += a.end - a.start; ids.add(r.id); }
+      } else if (r.staffId === staffId) {
+        booked += r.end - r.start;
+        ids.add(r.id);
+      }
+    }
+    const workMin = CLOSE_MIN - OPEN_MIN;
+    const availMin = Math.max(1, workMin - blockMin);
+    return { count: ids.size, bookedMin: booked, blockMin, workMin, availMin, rate: Math.round((booked / availMin) * 100) };
+  }
+
   // スタッフ行に描く担当セグメント (複数担当は担当ブロックごとに分割描画)
   function segmentsForStaff(staffId: string) {
     const out: { r: Reservation; segStart: number; segEnd: number; role?: AssignRole; label?: string; relayPrev?: boolean; relayNext?: boolean }[] = [];
@@ -425,14 +448,17 @@ export function ReservationBoard() {
           </div>
 
           {/* スタッフ行 */}
-          {STAFF.map((s) => (
+          {STAFF.map((s) => {
+            const st = staffDayStats(s.id);
+            return (
             <div key={s.id} className="flex" style={{ height: ROW_H }}>
               <div
                 className="sticky left-0 z-20 flex shrink-0 items-center gap-2 border-b border-r border-border bg-card px-3"
                 style={{ width: LABEL_W }}
+                title={`勤務 ${Math.round(st.workMin / 60)}h ／ 休憩・ブロック ${st.blockMin}分 ／ 稼働可能 ${Math.round(st.availMin / 6) / 10}h ／ 予約 ${st.bookedMin}分 ／ 稼働率 ${st.rate}%`}
               >
                 <span
-                  className="h-7 w-1.5 rounded-full"
+                  className="h-9 w-1.5 rounded-full"
                   style={{ background: s.color }}
                   aria-hidden
                 />
@@ -440,6 +466,9 @@ export function ReservationBoard() {
                   <div className="text-sm font-medium">{s.name}</div>
                   <div className="text-[10px] text-muted-foreground">
                     {s.acceptsNomination ? "指名可" : "指名不可"}
+                  </div>
+                  <div className="mt-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+                    予約{st.count}件 ・ 稼働<span className={st.rate >= 70 ? "text-emerald-600" : st.rate >= 40 ? "text-foreground" : "text-amber-600"}>{st.rate}%</span>
                   </div>
                 </div>
               </div>
@@ -476,7 +505,8 @@ export function ReservationBoard() {
                 })}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
