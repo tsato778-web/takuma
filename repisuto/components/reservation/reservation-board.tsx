@@ -287,14 +287,20 @@ export function ReservationBoard() {
 
   // スタッフ行に描く担当セグメント (複数担当は担当ブロックごとに分割描画)
   function segmentsForStaff(staffId: string) {
-    const out: { r: Reservation; segStart: number; segEnd: number; role?: AssignRole; label?: string }[] = [];
+    const out: { r: Reservation; segStart: number; segEnd: number; role?: AssignRole; label?: string; relayPrev?: boolean; relayNext?: boolean }[] = [];
     for (const base of dayReservations) {
       const r =
         preview && preview.id === base.id
           ? { ...base, start: preview.start, end: preview.end, staffId: preview.staffId }
           : base;
       if (r.assignments && r.assignments.length) {
-        for (const a of r.assignments) if (a.staffId === staffId) out.push({ r, segStart: a.start, segEnd: a.end, role: a.role, label: a.label });
+        const asg = r.assignments;
+        for (const a of asg) {
+          if (a.staffId !== staffId) continue;
+          const relayPrev = asg.some((x) => x.staffId !== a.staffId && Math.abs(x.end - a.start) <= 1);
+          const relayNext = asg.some((x) => x.staffId !== a.staffId && Math.abs(x.start - a.end) <= 1);
+          out.push({ r, segStart: a.start, segEnd: a.end, role: a.role, label: a.label, relayPrev, relayNext });
+        }
       } else if (r.staffId === staffId) {
         out.push({ r, segStart: r.start, segEnd: r.end });
       }
@@ -461,6 +467,8 @@ export function ReservationBoard() {
                       segEnd={seg.segEnd}
                       segRole={seg.role}
                       segLabel={seg.label}
+                      relayPrev={seg.relayPrev}
+                      relayNext={seg.relayNext}
                       onBodyPointerDown={(e) => (isFull ? startDrag(e, r, "move") : (e.stopPropagation(), setDetailId(r.id)))}
                       onResizePointerDown={(e) => startDrag(e, r, "resize")}
                     />

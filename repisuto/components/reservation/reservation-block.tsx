@@ -12,6 +12,7 @@ import {
   Ban,
   Minus,
   AlertTriangle,
+  ChevronRight,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -57,6 +58,8 @@ interface Props {
   segEnd?: number;
   segRole?: AssignRole; // 指定時は assignment セグメント
   segLabel?: string;
+  relayPrev?: boolean; // 直前に別スタッフから引き継がれた
+  relayNext?: boolean; // 直後に別スタッフへ引き継ぐ
   onBodyPointerDown: (e: React.PointerEvent) => void;
   onResizePointerDown: (e: React.PointerEvent) => void;
 }
@@ -73,6 +76,8 @@ export function ReservationBlock({
   segEnd,
   segRole,
   segLabel,
+  relayPrev,
+  relayNext,
   onBodyPointerDown,
   onResizePointerDown,
 }: Props) {
@@ -163,7 +168,8 @@ export function ReservationBlock({
     );
   }
 
-  // --- サブ/補助 担当セグメント (薄いブロック・予約不可を表す) ---
+  // --- サブ/補助 担当セグメント = 「施術リレー」(同一顧客・同一コース色で引き継ぎ表現) ---
+  const palette0 = MENU_COLOR[reservationColor(r)];
   if (segRole === "SUB" || segRole === "ASSIST") {
     const c = customer?.name ?? "顧客";
     const isAssist = segRole === "ASSIST";
@@ -171,21 +177,33 @@ export function ReservationBlock({
       <div
         role="button"
         tabIndex={0}
-        title={`${ROLE_LABEL[segRole]}：${c} / ${segLabel ?? ""} ${minToLabel(start)}-${minToLabel(end)}（この時間は予約不可）`}
+        title={`${c}：${segLabel ?? ""}（${ROLE_LABEL[segRole]}）${minToLabel(start)}-${minToLabel(end)}・同一予約の引き継ぎ`}
         onPointerDown={onBodyPointerDown}
         onClick={(e) => e.stopPropagation()}
-        style={{ left, width, backgroundImage: HATCH_LIGHT }}
+        style={{ left, width, borderLeftColor: staff?.color }}
         className={cn(
-          "group absolute top-1 bottom-1 cursor-pointer overflow-hidden rounded-md border border-dashed px-2 py-1 text-left transition-shadow hover:shadow-md",
-          isAssist ? "border-slate-400 bg-slate-200/70 text-slate-600" : "border-accent/50 bg-accent/10 text-accent",
+          "group absolute top-1 bottom-1 flex cursor-pointer flex-col overflow-hidden border border-l-[3px] px-2 py-1 text-left shadow-sm transition-shadow hover:z-20 hover:shadow-md",
+          palette0.tint,
+          isAssist && "opacity-90",
+          relayPrev ? "rounded-l-none border-l-2 border-dashed border-l-accent" : "rounded-l-md",
+          relayNext ? "rounded-r-none" : "rounded-r-md",
           highlight && "z-30 ring-2 ring-accent"
         )}
       >
-        <div className="flex items-center gap-1 text-[10px] font-semibold">
-          <span className="rounded bg-white/70 px-1 py-px text-[8px]">{ROLE_LABEL[segRole]}</span>
+        {relayPrev && <ChevronRight className="absolute -left-0.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-accent" />}
+        <div className={cn("flex items-center gap-1 text-[11px] font-semibold leading-tight text-foreground", relayPrev && "pl-2")}>
+          <span className={cn("shrink-0 rounded px-1 py-px text-[8px] font-bold", isAssist ? "bg-slate-200 text-slate-600" : "bg-accent/15 text-accent")}>
+            {isAssist ? "補助" : `${segLabel ?? ""}担当`}
+          </span>
           <span className="truncate">{c}</span>
         </div>
-        <div className="mt-auto truncate text-[9px] opacity-80">{segLabel}・{minToLabel(start)}</div>
+        <div className={cn("truncate text-[10px] text-accent", relayPrev && "pl-2")}>
+          {relayPrev ? `↩ ${c.split(" ")[0]}の施術の続き` : segLabel}
+        </div>
+        <div className={cn("mt-auto text-[10px] font-medium tabular-nums text-foreground/70", relayPrev && "pl-2")}>
+          {minToLabel(start)}-{minToLabel(end)}
+        </div>
+        {relayNext && <ChevronRight className="absolute right-0 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-accent" />}
       </div>
     );
   }
@@ -213,10 +231,13 @@ export function ReservationBlock({
         !conflict && r.status === "ARRIVED" && "ring-1 ring-primary/50",
         !conflict && r.status === "DONE" && "ring-1 ring-emerald-300",
         !conflict && isNew && "ring-2 ring-rose-300",
-        !conflict && staffWarn && "border-amber-400 ring-2 ring-amber-400"
+        !conflict && staffWarn && "border-amber-400 ring-2 ring-amber-400",
+        relayNext && "rounded-r-none",
+        relayPrev && "rounded-l-none border-l-2 border-dashed border-l-accent"
       )}
     >
       {intervalBand}
+      {relayNext && <ChevronRight className="absolute right-0 top-1/2 z-20 h-3.5 w-3.5 -translate-y-1/2 text-accent" />}
 
       {isNew && (
         <span className="absolute right-0 top-0 z-20 rounded-bl-md bg-rose-500 px-1 py-px text-[8px] font-bold leading-none text-white shadow-sm">NEW</span>
@@ -229,7 +250,7 @@ export function ReservationBlock({
 
       <div className="flex items-center gap-1 truncate text-[10px] text-muted-foreground">
         <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", palette.dot)} aria-hidden />
-        <span className="truncate">{segRole === "MAIN" && segLabel ? segLabel : menuNames(r.menuIds)}</span>
+        <span className="truncate">{segRole === "MAIN" && segLabel ? `${segLabel}担当` : menuNames(r.menuIds)}</span>
       </div>
 
       <div className="mt-auto flex flex-wrap items-center gap-1">
