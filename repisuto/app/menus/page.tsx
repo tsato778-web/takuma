@@ -3,7 +3,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { PageShell, MasterTable, Chip } from "@/components/admin/page-shell";
-import { MENUS, STAFF, MENU_COLOR, staffHandlesMenu, type MenuColor } from "@/lib/mock-data";
+import { MENUS, STAFF, MENU_COLOR, staffHandlesMenu, nominationOf, NOMINATION_LABEL, type MenuColor, type NominationPolicy } from "@/lib/mock-data";
 import { TICKET_PLANS, yen } from "@/lib/pos";
 
 const COLORS = Object.keys(MENU_COLOR) as MenuColor[];
@@ -31,10 +31,11 @@ export default function MenusPage() {
 function MenuList() {
   return (
     <MasterTable
-      columns={["並", "メニュー", "価格", "所要", "ｲﾝﾀｰﾊﾞﾙ", "カラー", "回数券", "対応スタッフ", "公開"]}
+      columns={["並", "メニュー", "価格", "所要", "ｲﾝﾀｰﾊﾞﾙ", "カラー", "回数券", "対応スタッフ", "指名", "公開"]}
       rows={MENUS.map((m, i) => {
         const ticket = TICKET_PLANS.find((t) => t.menus === m.name);
         const staffs = STAFF.filter((s) => staffHandlesMenu(s.id, m.id));
+        const pol = nominationOf(m);
         return [
           String(i + 1),
           <span key="n" className="font-medium">{m.name}</span>,
@@ -44,6 +45,7 @@ function MenuList() {
           <span key="c" className={`inline-block h-3.5 w-3.5 rounded-full ${MENU_COLOR[m.color].dot}`} />,
           ticket ? <Chip key="t" tone="accent">対象</Chip> : <Chip key="t" tone="muted">対象外</Chip>,
           <span key="s" className="text-[11px] text-muted-foreground">{staffs.map((s) => s.name.split(" ")[0]).join("・")}</span>,
+          <Chip key="nm" tone={pol === "FORCED" || pol === "DEDICATED" ? "accent" : "muted"}>{NOMINATION_LABEL[pol]}</Chip>,
           <Chip key="p" tone="ok">公開</Chip>,
         ];
       })}
@@ -51,10 +53,19 @@ function MenuList() {
   );
 }
 
+const NOMINATION_DESC: Record<NominationPolicy, string> = {
+  OPTIONAL: "お客様が担当を選べる（おまかせも可）",
+  NONE: "担当選択なし。店舗側で割り当て",
+  FORCED: "選択時に特定スタッフが自動で担当",
+  DEDICATED: "対応スタッフのみ予約可（他は不可）",
+};
+
 function MenuForm() {
   const [color, setColor] = React.useState<MenuColor>("blue");
   const [staffOn, setStaffOn] = React.useState<Set<string>>(new Set(STAFF.map((s) => s.id)));
   const [ticket, setTicket] = React.useState(false);
+  const [nomination, setNomination] = React.useState<NominationPolicy>("OPTIONAL");
+  const [forcedStaff, setForcedStaff] = React.useState<string>(STAFF[0].id);
   const toggleStaff = (id: string) => setStaffOn((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   return (
@@ -112,6 +123,28 @@ function MenuForm() {
             })}
           </div>
           <p className="mt-2 text-[11px] text-muted-foreground">チェックを外したスタッフは、予約作成・お客様予約画面でこのメニューを選べません（台帳でも不一致を警告）。</p>
+        </div>
+
+        {/* 指名設定 */}
+        <div className="rounded-xl border border-border bg-card p-4">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">指名設定（お客様予約画面に反映）</div>
+          <div className="grid grid-cols-2 gap-2">
+            {(Object.keys(NOMINATION_DESC) as NominationPolicy[]).map((p) => (
+              <button key={p} type="button" onClick={() => setNomination(p)} className={cn("rounded-lg border p-2 text-left transition-colors", nomination === p ? "border-primary bg-primary/5" : "border-border hover:bg-secondary/40")}>
+                <div className="text-xs font-medium">{NOMINATION_LABEL[p]}</div>
+                <div className="text-[10px] text-muted-foreground">{NOMINATION_DESC[p]}</div>
+              </button>
+            ))}
+          </div>
+          {nomination === "FORCED" && (
+            <label className="mt-2 flex items-center gap-2 text-xs">
+              <span className="text-muted-foreground">強制担当</span>
+              <select value={forcedStaff} onChange={(e) => setForcedStaff(e.target.value)} className="h-8 rounded-md border border-input bg-card px-2 text-xs">
+                {STAFF.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </label>
+          )}
+          <p className="mt-2 text-[11px] text-muted-foreground">「サロンの空き状況（おまかせ）／スタッフ別の空き状況（指名）」の出し分けに反映されます。</p>
         </div>
       </div>
 

@@ -97,7 +97,24 @@ export interface Menu {
   intervalMin: number; // 施術後のインターバル/準備時間 (台帳占有のみ)
   price: number;
   color: MenuColor;
+  capacity?: number; // 同時予約可能数 (席/設備の上限。未指定=対応スタッフ数で律速)
+  nomination?: NominationPolicy; // 指名ポリシー (未指定=OPTIONAL)
+  forcedStaffId?: string; // nomination=FORCED のときの強制担当
 }
+
+// メニュー別の指名可否 (お客様予約画面の担当選択を制御)
+export type NominationPolicy =
+  | "OPTIONAL" // 指名可能: お客様が担当を選べる / おまかせも可
+  | "NONE" // 指名不可: 担当選択なし。店舗側で割り当て
+  | "FORCED" // 強制指名: 選択時に特定スタッフが自動で担当
+  | "DEDICATED"; // 専用メニュー: 対応スタッフ(menuIds)のみ。他スタッフは予約不可
+export const NOMINATION_LABEL: Record<NominationPolicy, string> = {
+  OPTIONAL: "指名可能",
+  NONE: "指名不可",
+  FORCED: "強制指名",
+  DEDICATED: "専用メニュー",
+};
+export const nominationOf = (m: Menu | undefined): NominationPolicy => m?.nomination ?? "OPTIONAL";
 
 // 店舗設定。メニュー個別にインターバル未設定の場合はこの既定値を使用
 export const STORE_SETTINGS = {
@@ -157,9 +174,9 @@ export const STORES: Store[] = [
 ];
 
 export const STAFF: Staff[] = [
-  { id: "stf_tanaka", storeId: STORE.id, staffNo: "S0001", name: "田中 美咲", kana: "タナカ ミサキ", color: "#0ea5b7", acceptsNomination: true, active: true, menuIds: ["menu_cut", "menu_color", "menu_perm", "menu_treat", "menu_spa", "menu_face"] },
+  { id: "stf_tanaka", storeId: STORE.id, staffNo: "S0001", name: "田中 美咲", kana: "タナカ ミサキ", color: "#0ea5b7", acceptsNomination: true, active: true, menuIds: ["menu_cut", "menu_color", "menu_perm", "menu_treat", "menu_spa", "menu_face", "menu_vip"] },
   { id: "stf_sato", storeId: STORE.id, staffNo: "S0002", name: "佐藤 健", kana: "サトウ ケン", color: "#7c6df2", acceptsNomination: true, active: true, menuIds: ["menu_cut", "menu_color", "menu_perm", "menu_treat"] },
-  { id: "stf_suzuki", storeId: STORE.id, staffNo: "S0003", name: "鈴木 葵", kana: "スズキ アオイ", color: "#e8739a", acceptsNomination: true, active: true, menuIds: ["menu_cut", "menu_color", "menu_treat", "menu_spa", "menu_face"] },
+  { id: "stf_suzuki", storeId: STORE.id, staffNo: "S0003", name: "鈴木 葵", kana: "スズキ アオイ", color: "#e8739a", acceptsNomination: true, active: true, menuIds: ["menu_cut", "menu_color", "menu_treat", "menu_spa", "menu_face", "menu_dx"] },
   { id: "stf_takahashi", storeId: STORE.id, staffNo: "S0004", name: "高橋 涼", kana: "タカハシ リョウ", color: "#f0a13b", acceptsNomination: false, active: true, menuIds: ["menu_cut", "menu_treat", "menu_spa"] },
 ];
 
@@ -170,12 +187,16 @@ export function nextStaffNo(): string {
 }
 
 export const MENUS: Menu[] = [
-  { id: "menu_cut", storeId: STORE.id, name: "カット", durationMin: 60, intervalMin: 0, price: 4400, color: "blue" },
-  { id: "menu_color", storeId: STORE.id, name: "カラー", durationMin: 90, intervalMin: 15, price: 6600, color: "purple" },
-  { id: "menu_perm", storeId: STORE.id, name: "パーマ", durationMin: 120, intervalMin: 15, price: 8800, color: "amber" },
-  { id: "menu_treat", storeId: STORE.id, name: "トリートメント", durationMin: 30, intervalMin: 0, price: 3300, color: "teal" },
-  { id: "menu_spa", storeId: STORE.id, name: "ヘッドスパ", durationMin: 45, intervalMin: 10, price: 5500, color: "green" },
-  { id: "menu_face", storeId: STORE.id, name: "フェイシャル", durationMin: 60, intervalMin: 10, price: 9900, color: "pink" },
+  { id: "menu_cut", storeId: STORE.id, name: "カット", durationMin: 60, intervalMin: 0, price: 4400, color: "blue", nomination: "OPTIONAL" },
+  { id: "menu_color", storeId: STORE.id, name: "カラー", durationMin: 90, intervalMin: 15, price: 6600, color: "purple", nomination: "OPTIONAL" },
+  { id: "menu_perm", storeId: STORE.id, name: "パーマ", durationMin: 120, intervalMin: 15, price: 8800, color: "amber", nomination: "OPTIONAL" },
+  { id: "menu_treat", storeId: STORE.id, name: "トリートメント", durationMin: 30, intervalMin: 0, price: 3300, color: "teal", nomination: "NONE" }, // クイック追加: 指名不可・店舗割当
+  { id: "menu_spa", storeId: STORE.id, name: "ヘッドスパ", durationMin: 45, intervalMin: 10, price: 5500, color: "green", capacity: 2, nomination: "OPTIONAL" }, // スパ席2
+  { id: "menu_face", storeId: STORE.id, name: "フェイシャル", durationMin: 60, intervalMin: 10, price: 9900, color: "pink", capacity: 2, nomination: "OPTIONAL" }, // 個室2
+  // 強制指名: 選択した時点で田中が担当になる専用VIPコース
+  { id: "menu_vip", storeId: STORE.id, name: "田中スペシャルVIP", durationMin: 120, intervalMin: 15, price: 19800, color: "amber", nomination: "FORCED", forcedStaffId: "stf_tanaka" },
+  // 専用メニュー: 鈴木のみ対応 (他スタッフでは予約不可)
+  { id: "menu_dx", storeId: STORE.id, name: "小顔デザインスパ（鈴木）", durationMin: 90, intervalMin: 10, price: 13200, color: "green", nomination: "DEDICATED" },
 ];
 
 export const CUSTOMERS: Customer[] = [
