@@ -14,6 +14,9 @@ import {
   Lock,
   Crown,
   UserCheck,
+  Ticket as TicketIcon,
+  History,
+  Megaphone,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -27,6 +30,7 @@ import { minToLabel, addDays } from "@/lib/time";
 import {
   MENUS,
   STORE,
+  CUSTOMERS,
   SEED_RESERVATIONS,
   menuById,
   staffById,
@@ -35,6 +39,8 @@ import {
   NOMINATION_LABEL,
   MENU_COLOR,
   type Staff,
+  type Customer,
+  type Ticket,
 } from "@/lib/mock-data";
 import {
   resolveBookingPolicy,
@@ -43,7 +49,8 @@ import {
   priceOf,
 } from "@/lib/booking";
 import { staffFreeForSlot, CURRENT_OPENING_RULE, OPENING_OPTIONS } from "@/lib/shifts";
-import { jpDate } from "@/lib/customer-data";
+import { jpDate, menuUsageMap, lastVisitSummary, ticketUsableMenuIds, type MenuUsage } from "@/lib/customer-data";
+import { linkPrefillFor, type LinkPrefill } from "@/lib/links";
 
 const DAYS = 7; // 1ページの表示日数（前/次の一週間で移動）
 
@@ -65,6 +72,8 @@ interface Confirmed {
   start: number;
   end: number;
   form: CustomerForm;
+  usingTicketId?: string; // 回数券消化で予約した場合
+  linkInfo?: { source: string; campaign: string; tags: string[]; adName?: string }; // 広告リンク経由
 }
 
 const EMPTY_FORM: CustomerForm = { name: "", kana: "", phone: "", email: "", notes: "", lineOptin: true };
@@ -79,26 +88,54 @@ export function CustomerBooking() {
   const [picked, setPicked] = React.useState<{ date: Date; start: number } | null>(null);
   const [form, setForm] = React.useState<CustomerForm>(EMPTY_FORM);
   const [confirmed, setConfirmed] = React.useState<Confirmed | null>(null);
+  const [previewCustomerId, setPreviewCustomerId] = React.useState<string>("");
+  const [linkPrefill, setLinkPrefill] = React.useState<LinkPrefill | null>(null);
+  const [usingTicketId, setUsingTicketId] = React.useState<string | null>(null);
+
+  // クエリパラメータ ?link=<id> から強制リンクのプリフィルを読み込む（クライアント側のみ）
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const linkId = params.get("link");
+    if (!linkId) return;
+    const pf = linkPrefillFor(linkId);
+    if (!pf) return;
+    setLinkPrefill(pf);
+    if (pf.menuIds.length) setMenuIds(pf.menuIds);
+  }, []);
+
+  // 管理者プレビュー対象の顧客（LIFF自動認識の代替・モック）
+  const previewCustomer: Customer | undefined = previewCustomerId ? CUSTOMERS.find((c) => c.id === previewCustomerId) : undefined;
+  const usage: Record<string, MenuUsage> = React.useMemo(() => (previewCustomer ? menuUsageMap(previewCustomer) : {}), [previewCustomer]);
+  const lastVisit = React.useMemo(() => (previewCustomer ? lastVisitSummary(previewCustomer) : null), [previewCustomer]);
+  const usableTickets = React.useMemo(() => (previewCustomer ? ticketUsableMenuIds(previewCustomer) : []), [previewCustomer]);
 
   const policy = resolveBookingPolicy(menuIds);
   const forced = policy.forcedStaff;
   const occ = occupancyOf(menuIds);
 
-  // メニュー変更時に担当タブ/選択を整える
+  // 強制リンクによるロック
+  const lockMenu = linkPrefill?.allowMenuChange === false;
+  const hideStaffSection = linkPrefill?.showStaffSelector === false;
+  const linkBlocksNomination = linkPrefill?.allowNomination === false;
+
+  // メニュー変更時に担当タブ/選択を整える（リンクのロックも反映）
   const menuKey = menuIds.join(",");
   React.useEffect(() => {
     setPicked(null);
     const p = resolveBookingPolicy(menuIds);
-    if (p.forcedStaff) {
-      setTab("staff");
-      setStaffId(p.forcedStaff.id);
-    } else if (!p.allowNomination) {
-      setTab("omakase");
-    } else {
-      setStaffId((cur) => (cur && p.nominatable.some((s) => s.id === cur) ? cur : p.nominatable[0]?.id ?? null));
+    if (linkPrefill?.forcedStaffId) {
+      setTab("staff"); setStaffId(linkPrefill.forcedStaffId); return;
     }
+    if (p.forcedStaff) {
+      setTab("staff"); setStaffId(p.forcedStaff.id); return;
+    }
+    if (linkBlocksNomination || !p.allowNomination) {
+      setTab("omakase"); return;
+    }
+    setStaffId((cur) => (cur && p.nominatable.some((s) => s.id === cur) ? cur : p.nominatable[0]?.id ?? null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [menuKey]);
+  }, [menuKey, linkPrefill?.linkId, linkBlocksNomination]);
 
   const effMode: "omakase" | "staff" = forced ? "staff" : tab;
   const effStaffId = forced ? forced.id : tab === "staff" ? staffId ?? undefined : undefined;
@@ -106,10 +143,12 @@ export function CustomerBooking() {
   const poolEmpty = effMode === "staff" ? !effStaffId : policy.candidates.length === 0;
 
   function toggleMenu(id: string) {
+    if (lockMenu) return; // 広告リンクでメニュー強制中
     setMenuIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    setUsingTicketId(null);
   }
   function switchTab(t: "omakase" | "staff") {
-    if (t === "staff" && !policy.allowNomination) return;
+    if (t === "staff" && (linkBlocksNomination || !policy.allowNomination)) return;
     setTab(t);
     setPicked(null);
     if (t === "staff" && !staffId) setStaffId(policy.nominatable[0]?.id ?? null);
@@ -119,10 +158,30 @@ export function CustomerBooking() {
     setPicked(null);
   }
 
+  // 「前回と同じ内容で予約」: 前回メニュー＋前回担当を引き継ぐ
+  function repeatLastVisit() {
+    if (!lastVisit) return;
+    if (!lockMenu) setMenuIds(lastVisit.menuIds);
+    const s = staffById(lastVisit.staffId);
+    if (s?.acceptsNomination && !linkBlocksNomination) { setTab("staff"); setStaffId(s.id); }
+    setUsingTicketId(null);
+  }
+  // 「回数券を利用して予約」: そのチケットで消化できるメニューを選択
+  function useTicket(ticketId: string, ticketMenuIds: string[]) {
+    if (lockMenu) return;
+    setMenuIds([ticketMenuIds[0]]);
+    setUsingTicketId(ticketId);
+  }
+
   // おまかせ確定時に実際に割り当てる主担当（最初に空いている候補）
   function resolveAssignee(date: Date, start: number): Staff | undefined {
     if (forced) return forced;
     if (effMode === "staff" && effStaffId) return staffById(effStaffId);
+    // 広告リンクの強制担当 (showStaffSelector=false 時の自動割当先)
+    if (linkPrefill?.forcedStaffId) {
+      const s = staffById(linkPrefill.forcedStaffId);
+      if (s) return s;
+    }
     const end = start + occ;
     const dayRes = SEED_RESERVATIONS.filter((r) => r.dateKey === dateKey(date));
     return policy.candidates.find((s) => staffFreeForSlot(s.id, date, start, end, dayRes));
@@ -140,19 +199,24 @@ export function CustomerBooking() {
       start: picked.start,
       end: picked.start + occ,
       form: { ...form },
+      usingTicketId: usingTicketId ?? undefined,
+      linkInfo: linkPrefill
+        ? { source: linkPrefill.source, campaign: linkPrefill.campaign, tags: linkPrefill.autoTags, adName: linkPrefill.adName }
+        : undefined,
     });
     setStep("done");
   }
 
   function startOver() {
     setStep("select");
-    setMenuIds([]);
+    setMenuIds(linkPrefill?.menuIds ?? []);
     setTab("omakase");
     setStaffId(null);
     setWeekStart(today);
     setPicked(null);
     setForm(EMPTY_FORM);
     setConfirmed(null);
+    setUsingTicketId(null);
   }
 
   const openingLabel = OPENING_OPTIONS.find((o) => o.id === CURRENT_OPENING_RULE)?.label ?? "";
@@ -165,13 +229,45 @@ export function CustomerBooking() {
       action={<MockBadge />}
     >
       <div className="mx-auto max-w-md">
+        {/* 管理者プレビュー（お客様には非表示。LIFF/LINEログインのモック） */}
+        <div className="mb-2 flex items-center gap-2 rounded-lg border border-dashed border-border bg-secondary/20 px-3 py-1.5 text-[11px]">
+          <UserCheck className="h-3 w-3 text-muted-foreground" />
+          <span className="text-muted-foreground">管理者プレビュー：お客様として表示</span>
+          <select value={previewCustomerId} onChange={(e) => { setPreviewCustomerId(e.target.value); setUsingTicketId(null); }} className="ml-auto h-6 rounded-md border border-input bg-card px-1.5 text-[11px]">
+            <option value="">未ログイン（新規）</option>
+            {CUSTOMERS.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}（来店{c.visitCount}回{c.tickets.length > 0 ? "・回数券あり" : ""}）</option>
+            ))}
+          </select>
+        </div>
+
         {/* LINE風ヘッダー */}
         <div className="rounded-t-2xl bg-gradient-to-br from-primary to-accent px-4 py-3 text-primary-foreground">
           <div className="flex items-center gap-2 text-[11px] opacity-90">
             <Sparkles className="h-3.5 w-3.5" />リピスト ビューティー {STORE.name}
           </div>
           <div className="text-base font-semibold">かんたんWEB予約</div>
+          {previewCustomer && <div className="mt-0.5 text-[11px] opacity-90">{previewCustomer.name} 様</div>}
         </div>
+
+        {/* 広告リンク経由バナー（リンクがある時のみ） */}
+        {linkPrefill && (
+          <div className="border-x border-border bg-amber-50/70 px-4 py-2 text-[11px]">
+            <div className="inline-flex items-center gap-1 font-semibold text-amber-800"><Megaphone className="h-3 w-3" />広告リンク経由ご予約</div>
+            <div className="text-amber-700/90">{linkPrefill.source} ／ {linkPrefill.campaign}{linkPrefill.adName ? `（${linkPrefill.adName}）` : ""}</div>
+            {linkPrefill.menuIds.length > 0 && (
+              <div className="mt-0.5 text-amber-700/90">
+                メニュー：{linkPrefill.menuIds.map((id) => menuById(id)?.name).filter(Boolean).join("＋")}
+                {lockMenu && "（変更不可）"}
+              </div>
+            )}
+            {linkPrefill.autoTags.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {linkPrefill.autoTags.map((t) => <span key={t} className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">#{t}</span>)}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ステッパー */}
         <div className="flex items-center justify-between border-x border-border bg-card px-4 py-2 text-[10px] font-medium">
@@ -191,26 +287,39 @@ export function CustomerBooking() {
 
         <div className="rounded-b-2xl border border-t-0 border-border bg-background p-4">
           {step === "select" && (
-            <SelectStep
-              menuIds={menuIds}
-              toggleMenu={toggleMenu}
-              policy={policy}
-              forced={forced}
-              tab={tab}
-              switchTab={switchTab}
-              staffId={effStaffId ?? null}
-              pickStaff={pickStaff}
-              weekStart={weekStart}
-              setWeekStart={setWeekStart}
-              today={today}
-              effMode={effMode}
-              poolEmpty={poolEmpty}
-              gridSelection={gridSelection}
-              onPick={(date, start) => setPicked({ date, start })}
-              picked={picked}
-              occ={occ}
-              onNext={() => setStep("form")}
-            />
+            <div className="space-y-3">
+              {previewCustomer && usableTickets.length > 0 && (
+                <TicketsCard customer={previewCustomer} usableTickets={usableTickets} onUse={useTicket} active={usingTicketId} />
+              )}
+              {previewCustomer && lastVisit && (
+                <LastVisitCard lastVisit={lastVisit} onRepeat={repeatLastVisit} disabled={!!lockMenu} />
+              )}
+              <SelectStep
+                menuIds={menuIds}
+                toggleMenu={toggleMenu}
+                policy={policy}
+                forced={forced}
+                tab={tab}
+                switchTab={switchTab}
+                staffId={effStaffId ?? null}
+                pickStaff={pickStaff}
+                weekStart={weekStart}
+                setWeekStart={setWeekStart}
+                today={today}
+                effMode={effMode}
+                poolEmpty={poolEmpty}
+                gridSelection={gridSelection}
+                onPick={(date, start) => setPicked({ date, start })}
+                picked={picked}
+                occ={occ}
+                onNext={() => setStep("form")}
+                usage={usage}
+                lockMenu={!!lockMenu}
+                hideStaffSection={!!hideStaffSection}
+                linkBlocksNomination={!!linkBlocksNomination}
+                usingTicketId={usingTicketId}
+              />
+            </div>
           )}
 
           {step === "form" && (
@@ -235,6 +344,8 @@ export function CustomerBooking() {
               onEditSlot={() => setStep("select")}
               onEditForm={() => setStep("form")}
               onConfirm={goConfirm}
+              usingTicket={usingTicketId ? previewCustomer?.tickets.find((t) => t.id === usingTicketId) : undefined}
+              linkInfo={linkPrefill ? { source: linkPrefill.source, campaign: linkPrefill.campaign, tags: linkPrefill.autoTags, adName: linkPrefill.adName } : undefined}
             />
           )}
 
@@ -275,35 +386,51 @@ function SelectStep(props: {
   picked: { date: Date; start: number } | null;
   occ: number;
   onNext: () => void;
+  usage: Record<string, MenuUsage>;
+  lockMenu: boolean;
+  hideStaffSection: boolean;
+  linkBlocksNomination: boolean;
+  usingTicketId: string | null;
 }) {
-  const { menuIds, toggleMenu, policy, forced, tab, switchTab, staffId, pickStaff, weekStart, setWeekStart, today, effMode, poolEmpty, gridSelection, onPick, picked, occ, onNext } = props;
+  const { menuIds, toggleMenu, policy, forced, tab, switchTab, staffId, pickStaff, weekStart, setWeekStart, today, effMode, poolEmpty, gridSelection, onPick, picked, occ, onNext, usage, lockMenu, hideStaffSection, linkBlocksNomination, usingTicketId } = props;
   const serviceMin = serviceMinOf(menuIds);
 
   return (
     <div className="space-y-4">
       {/* 1. メニュー */}
-      <Section step={1} title="メニューを選ぶ" hint="複数選択できます">
+      <Section step={1} title="メニューを選ぶ" hint={lockMenu ? "このリンクではメニューが固定です" : "複数選択できます"}>
+        {usingTicketId && (
+          <div className="mb-1.5 flex items-center gap-1 rounded-md border border-accent/30 bg-accent/5 px-2 py-1 text-[11px] text-accent">
+            <TicketIcon className="h-3 w-3" />回数券消化で予約 ・ 対応メニューのみ選択可
+          </div>
+        )}
         <div className="flex flex-wrap gap-1.5">
           {MENUS.map((m) => {
             const on = menuIds.includes(m.id);
             const pol = nominationOf(m);
+            const u = usage[m.id];
+            const disabled = lockMenu && !on;
             return (
               <button
                 key={m.id}
                 type="button"
+                disabled={disabled}
                 onClick={() => toggleMenu(m.id)}
                 className={cn(
                   "rounded-lg border px-2.5 py-1.5 text-left text-xs font-medium transition-colors",
-                  on ? "border-primary bg-primary/10 text-primary" : "border-border bg-card text-muted-foreground hover:bg-secondary"
+                  on ? "border-primary bg-primary/10 text-primary" : "border-border bg-card text-muted-foreground hover:bg-secondary",
+                  disabled && "cursor-not-allowed opacity-50"
                 )}
               >
                 <span className="flex items-center gap-1">
                   <span className={cn("h-2 w-2 rounded-full", MENU_COLOR[m.color].dot)} />
                   {m.name}
+                  {lockMenu && on && <Lock className="h-2.5 w-2.5 opacity-70" />}
                 </span>
-                <span className="mt-0.5 flex items-center gap-1 text-[10px] opacity-70">
+                <span className="mt-0.5 flex flex-wrap items-center gap-1 text-[10px] opacity-70">
                   {m.durationMin}分 / ¥{m.price.toLocaleString()}
                   {pol !== "OPTIONAL" && <span className="rounded bg-secondary px-1 text-[9px] text-muted-foreground">{NOMINATION_LABEL[pol]}</span>}
+                  {u && <span className="rounded bg-emerald-50 px-1 text-[9px] text-emerald-700">前回 {jpDate(u.lastDate)}{u.count > 1 ? ` ・${u.count}回` : ""}</span>}
                 </span>
               </button>
             );
@@ -311,55 +438,56 @@ function SelectStep(props: {
         </div>
       </Section>
 
-      {/* 2. 担当 */}
-      <Section step={2} title="担当を選ぶ">
-        {forced ? (
-          <div className="flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-xs">
-            <Crown className="h-4 w-4 text-accent" />
-            <span><b>{forced.name}</b> が担当します（このメニューは強制指名）</span>
-          </div>
-        ) : (
-          <>
-            {/* おまかせ / スタッフ別 タブ */}
-            <div className="flex gap-1">
-              <TabBtn active={tab === "omakase"} onClick={() => switchTab("omakase")} label="サロンの空き状況" sub="指名なし・おまかせ" />
-              <TabBtn
-                active={tab === "staff"}
-                disabled={!policy.allowNomination}
-                onClick={() => switchTab("staff")}
-                label="スタッフ別の空き状況"
-                sub={policy.allowNomination ? "担当を指名" : "指名不可メニュー"}
-              />
+      {/* 2. 担当（広告リンクで担当欄非表示の場合はスキップ） */}
+      {!hideStaffSection && (
+        <Section step={2} title="担当を選ぶ">
+          {forced ? (
+            <div className="flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-xs">
+              <Crown className="h-4 w-4 text-accent" />
+              <span><b>{forced.name}</b> が担当します（このメニューは強制指名）</span>
             </div>
-            {tab === "omakase" ? (
-              <p className="mt-1.5 flex items-center gap-1 text-[10px] text-muted-foreground">
-                {policy.hasNoneMenu ? <Lock className="h-3 w-3" /> : <UserCheck className="h-3 w-3" />}
-                {policy.hasNoneMenu ? "このメニューは指名不可。担当は店舗で割り当てます。" : "対応できるスタッフの中から、空いている担当を自動でご案内します。"}
-              </p>
-            ) : (
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {policy.nominatable.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => pickStaff(s.id)}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
-                      staffId === s.id ? "border-foreground/30 bg-secondary text-foreground" : "border-border bg-card text-muted-foreground hover:bg-secondary"
-                    )}
-                  >
-                    <span className="h-2 w-2 rounded-full" style={{ background: s.color }} />
-                    {s.name.split(" ")[0]}
-                  </button>
-                ))}
+          ) : (
+            <>
+              <div className="flex gap-1">
+                <TabBtn active={tab === "omakase"} onClick={() => switchTab("omakase")} label="サロンの空き状況" sub="指名なし・おまかせ" />
+                <TabBtn
+                  active={tab === "staff"}
+                  disabled={!policy.allowNomination || linkBlocksNomination}
+                  onClick={() => switchTab("staff")}
+                  label="スタッフ別の空き状況"
+                  sub={linkBlocksNomination ? "このリンクは指名不可" : policy.allowNomination ? "担当を指名" : "指名不可メニュー"}
+                />
               </div>
-            )}
-          </>
-        )}
-      </Section>
+              {tab === "omakase" ? (
+                <p className="mt-1.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+                  {(policy.hasNoneMenu || linkBlocksNomination) ? <Lock className="h-3 w-3" /> : <UserCheck className="h-3 w-3" />}
+                  {linkBlocksNomination ? "このリンクは指名不可。担当は店舗で割り当てます。" : policy.hasNoneMenu ? "このメニューは指名不可。担当は店舗で割り当てます。" : "対応できるスタッフの中から、空いている担当を自動でご案内します。"}
+                </p>
+              ) : (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {policy.nominatable.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => pickStaff(s.id)}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                        staffId === s.id ? "border-foreground/30 bg-secondary text-foreground" : "border-border bg-card text-muted-foreground hover:bg-secondary"
+                      )}
+                    >
+                      <span className="h-2 w-2 rounded-full" style={{ background: s.color }} />
+                      {s.name.split(" ")[0]}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </Section>
+      )}
 
-      {/* 3. 日時（◯△×） */}
-      <Section step={3} title="日時を選ぶ" hint={menuIds.length === 0 ? undefined : `所要約${serviceMin}分`}>
+      {/* 日時（◯△×） */}
+      <Section step={hideStaffSection ? 2 : 3} title="日時を選ぶ" hint={menuIds.length === 0 ? undefined : `所要約${serviceMin}分`}>
         {menuIds.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border bg-secondary/20 px-3 py-4 text-center text-xs text-muted-foreground">まずメニューを選択してください</p>
         ) : poolEmpty ? (
@@ -455,17 +583,33 @@ function ConfirmStep(props: {
   onEditSlot: () => void;
   onEditForm: () => void;
   onConfirm: () => void;
+  usingTicket?: Ticket;
+  linkInfo?: { source: string; campaign: string; tags: string[]; adName?: string };
 }) {
-  const { menuIds, assignee, nominated, forced, date, start, occ, form, onEditSlot, onEditForm, onConfirm } = props;
+  const { menuIds, assignee, nominated, forced, date, start, occ, form, onEditSlot, onEditForm, onConfirm, usingTicket, linkInfo } = props;
   const staffLabel = forced ? `${assignee?.name}（強制指名）` : nominated ? `${assignee?.name}（指名）` : "指名なし（おまかせ）";
   return (
     <div className="space-y-3">
       <div className="text-xs font-semibold text-foreground">ご予約内容の確認</div>
+      {usingTicket && (
+        <div className="flex items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-[11px] text-accent">
+          <TicketIcon className="h-3.5 w-3.5" />回数券消化で予約：{usingTicket.name}（残り{usingTicket.remaining}回 → {usingTicket.remaining - 1}回）
+        </div>
+      )}
+      {linkInfo && (
+        <div className="flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-[11px] text-amber-800">
+          <Megaphone className="h-3.5 w-3.5 shrink-0" />
+          <div>
+            広告リンク経由：{linkInfo.source} ／ {linkInfo.campaign}{linkInfo.adName ? `（${linkInfo.adName}）` : ""}
+            {linkInfo.tags.length > 0 && <div className="mt-0.5">自動付与タグ：{linkInfo.tags.join(", ")}</div>}
+          </div>
+        </div>
+      )}
       <div className="rounded-xl border border-border bg-card p-3 text-xs">
         <RowEdit label="メニュー" value={menuIds.map((id) => menuById(id)?.name).filter(Boolean).join(" + ")} onEdit={onEditSlot} />
         <RowEdit label="担当" value={staffLabel} onEdit={onEditSlot} />
         <RowEdit label="日時" value={`${jpDate(dateKey(date))} ${minToLabel(start)}〜${minToLabel(start + occ)}`} onEdit={onEditSlot} />
-        <Row label="料金" value={`¥${priceOf(menuIds).toLocaleString()}`} />
+        <Row label="料金" value={usingTicket ? "回数券消化（次回精算なし）" : `¥${priceOf(menuIds).toLocaleString()}`} />
       </div>
       <div className="rounded-xl border border-border bg-card p-3 text-xs">
         <RowEdit label="お名前" value={form.name} onEdit={onEditForm} />
@@ -495,6 +639,20 @@ function DoneStep({ confirmed, onStartOver }: { confirmed: Confirmed; onStartOve
         <div className="mt-2 text-sm font-semibold">ご予約ありがとうございます</div>
         <div className="text-[11px] text-muted-foreground">確認メッセージをLINEにお送りしました</div>
       </div>
+      {confirmed.usingTicketId && (
+        <div className="flex items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-[11px] text-accent">
+          <TicketIcon className="h-3.5 w-3.5" />回数券消化で予約しました
+        </div>
+      )}
+      {confirmed.linkInfo && (
+        <div className="flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-[11px] text-amber-800">
+          <Megaphone className="h-3.5 w-3.5 shrink-0" />
+          <div>
+            広告リンク経由：{confirmed.linkInfo.source} ／ {confirmed.linkInfo.campaign}
+            {confirmed.linkInfo.tags.length > 0 && <div className="mt-0.5">自動付与タグ：{confirmed.linkInfo.tags.join(", ")}</div>}
+          </div>
+        </div>
+      )}
       <div className="rounded-xl border border-border bg-card p-3">
         <div className="flex items-center gap-2">
           <CalendarCheck className="h-4 w-4 text-primary" />
@@ -578,6 +736,74 @@ function NextAction({ icon: Icon, label }: { icon: typeof MessageCircle; label: 
   return (
     <div className="flex items-center justify-center gap-1.5 rounded-xl border border-accent/30 bg-accent/5 py-2 text-[11px] font-semibold text-accent">
       <Icon className="h-3.5 w-3.5" />{label}
+    </div>
+  );
+}
+
+/* ============ 顧客コンテキスト：回数券保有 / 前回ご利用メニュー ============ */
+function TicketsCard({
+  customer,
+  usableTickets,
+  onUse,
+  active,
+}: {
+  customer: Customer;
+  usableTickets: { ticketId: string; menuIds: string[] }[];
+  onUse: (ticketId: string, menuIds: string[]) => void;
+  active: string | null;
+}) {
+  const tickets = customer.tickets.filter((t: Ticket) => t.remaining > 0);
+  if (tickets.length === 0) return null;
+  return (
+    <div className="rounded-xl border border-accent/30 bg-accent/5 p-3">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-accent">
+        <TicketIcon className="h-3.5 w-3.5" />保有回数券
+      </div>
+      <div className="mt-1.5 space-y-1.5">
+        {tickets.map((t) => {
+          const usable = usableTickets.find((u) => u.ticketId === t.id);
+          return (
+            <div key={t.id} className="flex items-center gap-2 rounded-lg bg-card p-2">
+              <div className="flex-1">
+                <div className="text-xs font-medium">{t.name}</div>
+                <div className="text-[10px] text-muted-foreground">残り{t.remaining}回 ／ 有効期限 {t.validUntil.replace(/-/g, "/")}</div>
+              </div>
+              {usable ? (
+                <Button size="sm" variant={active === t.id ? "secondary" : "default"} className="h-7 text-[11px]" onClick={() => onUse(t.id, usable.menuIds)}>
+                  {active === t.id ? "選択中" : "この回数券で予約"}
+                </Button>
+              ) : (
+                <span className="text-[10px] text-muted-foreground">対象メニュー無し</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function LastVisitCard({
+  lastVisit,
+  onRepeat,
+  disabled,
+}: {
+  lastVisit: { date: string; menuIds: string[]; staffName: string };
+  onRepeat: () => void;
+  disabled: boolean;
+}) {
+  const names = lastVisit.menuIds.map((id) => menuById(id)?.name).filter(Boolean).join(" + ");
+  return (
+    <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+        <History className="h-3.5 w-3.5" />前回ご利用メニュー
+      </div>
+      <div className="mt-1 text-sm font-medium">{names || "メニュー記録なし"}</div>
+      <div className="text-[11px] text-muted-foreground">{jpDate(lastVisit.date)} ／ 担当：{lastVisit.staffName}</div>
+      <Button size="sm" variant="outline" className="mt-2 h-7 text-[11px]" disabled={disabled || lastVisit.menuIds.length === 0} onClick={onRepeat}>
+        前回と同じ内容で予約
+      </Button>
+      {disabled && <p className="mt-1 text-[10px] text-muted-foreground">※ 広告リンク経由のためメニュー変更不可</p>}
     </div>
   );
 }

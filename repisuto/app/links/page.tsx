@@ -4,7 +4,7 @@ import * as React from "react";
 import { Copy, Check, Plus, Search, Copy as Dup, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { STORES } from "@/lib/mock-data";
+import { STORES, MENUS, STAFF } from "@/lib/mock-data";
 import { PageShell, Chip } from "@/components/admin/page-shell";
 import {
   LINKS,
@@ -13,7 +13,12 @@ import {
   LINK_APPEALS,
   LINK_MENUS,
   LINK_TEMPLATES,
+  PI_TEMPLATES,
+  CONFIRM_TEMPLATES,
+  THANKS_TEMPLATES,
+  REMINDER_TEMPLATES,
   buildUrl,
+  hasPrefill,
   type ForceLink,
 } from "@/lib/links";
 
@@ -78,7 +83,19 @@ function LinkList() {
             {list.map((l) => (
               <tr key={l.id} className="border-b border-border/60 last:border-0 hover:bg-secondary/30">
                 <td className="px-3 py-2.5 text-xs tabular-nums text-muted-foreground">{l.id}</td>
-                <td className="px-3 py-2.5"><div className="font-medium">{l.title}</div><div className="text-[10px] text-muted-foreground">{l.campaign} ・ {l.appeal} ・ {l.menu}</div></td>
+                <td className="px-3 py-2.5">
+                  <div className="font-medium">{l.title}</div>
+                  <div className="text-[10px] text-muted-foreground">{l.campaign} ・ {l.appeal} ・ {l.menu}</div>
+                  {hasPrefill(l) && (
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                      <Chip tone="accent">予約初期状態あり</Chip>
+                      {l.menuIds?.length ? <span className="text-[10px] text-muted-foreground">メニュー強制{l.menuIds.length > 1 ? `×${l.menuIds.length}` : ""}</span> : null}
+                      {l.allowNomination === false && <span className="text-[10px] text-muted-foreground">指名不可</span>}
+                      {l.showStaffSelector === false && <span className="text-[10px] text-muted-foreground">担当欄非表示</span>}
+                      {l.forcedStaffId && <span className="text-[10px] text-muted-foreground">強制担当</span>}
+                    </div>
+                  )}
+                </td>
                 <td className="px-3 py-2.5"><Chip tone="accent">{l.media}</Chip></td>
                 <td className="px-3 py-2.5 text-xs">{storeName(l.storeId)}</td>
                 <td className="px-3 py-2.5">{l.status === "稼働中" ? <Chip tone="ok">稼働中</Chip> : l.status === "停止" ? <Chip tone="warn">停止</Chip> : <Chip tone="muted">下書き</Chip>}</td>
@@ -92,6 +109,8 @@ function LinkList() {
                   </button>
                 </td>
                 <td className="whitespace-nowrap px-3 py-2.5 text-right text-[11px] text-muted-foreground">
+                  <a href={`/booking?link=${l.id}`} target="_blank" rel="noopener" className="text-primary hover:underline">プレビュー</a>
+                  <span className="mx-1">·</span>
                   <span className="cursor-default hover:text-foreground">編集</span>
                   <span className="mx-1">·</span>
                   <span className="inline-flex cursor-default items-center gap-0.5 hover:text-foreground"><Dup className="h-3 w-3" />複製</span>
@@ -110,9 +129,24 @@ function LinkList() {
 function NewLink() {
   const [v, setV] = React.useState({ store: "shibuya", media: "Meta広告", campaign: "肩こり訴求", adset: "女性30代", ad: "ad_01", appeal: "初回1,980円", menu: "整体60分", tag: "肩こり", template: "Aテンプレート" });
   const set = (k: string, val: string) => setV((p) => ({ ...p, [k]: val }));
-  const url = buildUrl({ storeId: v.store, media: v.media, campaign: v.campaign, appeal: v.appeal, menu: v.menu, tag: v.tag });
+  const [pf, setPf] = React.useState({
+    menuIds: [] as string[],
+    allowMenuChange: true,
+    allowNomination: true,
+    showStaffSelector: true,
+    forcedStaffId: "",
+    autoTags: "",
+    piTpl: PI_TEMPLATES[0],
+    cfTpl: CONFIRM_TEMPLATES[0],
+    thTpl: THANKS_TEMPLATES[0],
+    rmTpl: REMINDER_TEMPLATES[0],
+  });
+  const setpf = (patch: Partial<typeof pf>) => setPf((p) => ({ ...p, ...patch }));
+  const toggleMenuId = (id: string) => setPf((p) => ({ ...p, menuIds: p.menuIds.includes(id) ? p.menuIds.filter((x) => x !== id) : [...p.menuIds, id] }));
+  const url = buildUrl({ storeId: v.store, media: v.media, campaign: v.campaign, appeal: v.appeal, menu: v.menu, tag: v.tag, linkId: "draft" });
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]">
+      <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3 rounded-xl border border-border bg-card p-4">
         <Field label="店舗" value={v.store} onChange={(x) => set("store", x)} options={STORES.map((s) => ({ value: s.id.replace("store_", ""), label: s.name }))} />
         <Field label="媒体" value={v.media} onChange={(x) => set("media", x)} options={LINK_MEDIA} />
@@ -124,6 +158,48 @@ function NewLink() {
         <TextField label="タグ" value={v.tag} onChange={(x) => set("tag", x)} />
         <Field label="テンプレート" value={v.template} onChange={(x) => set("template", x)} options={LINK_TEMPLATES} />
       </div>
+
+      {/* 予約初期状態（広告リンク向け） */}
+      <div className="rounded-xl border border-border bg-card p-4">
+        <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">予約初期状態（広告リンク向け）</div>
+        <p className="mb-2 text-[11px] text-muted-foreground">広告リンク等で、お客様が開いた時点のメニュー・担当・項目表示を固定します。お客様予約画面 <code className="rounded bg-secondary px-1">/booking?link=ID</code> に反映。</p>
+        <div>
+          <div className="text-[10px] text-muted-foreground">メニュー強制選択（複数可）</div>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {MENUS.map((m) => {
+              const on = pf.menuIds.includes(m.id);
+              return (
+                <button key={m.id} type="button" onClick={() => toggleMenuId(m.id)} className={cn("rounded-full border px-2.5 py-1 text-xs", on ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-secondary")}>
+                  {m.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <label className="flex items-center gap-2 rounded-md border border-border px-2 py-1.5 text-xs"><input type="checkbox" checked={pf.allowMenuChange} onChange={(e) => setpf({ allowMenuChange: e.target.checked })} className="h-3.5 w-3.5 accent-primary" />メニュー変更可</label>
+          <label className="flex items-center gap-2 rounded-md border border-border px-2 py-1.5 text-xs"><input type="checkbox" checked={pf.allowNomination} onChange={(e) => setpf({ allowNomination: e.target.checked })} className="h-3.5 w-3.5 accent-primary" />担当指名可</label>
+          <label className="flex items-center gap-2 rounded-md border border-border px-2 py-1.5 text-xs"><input type="checkbox" checked={pf.showStaffSelector} onChange={(e) => setpf({ showStaffSelector: e.target.checked })} className="h-3.5 w-3.5 accent-primary" />担当者選択欄を表示</label>
+          <label className="block"><span className="text-[10px] text-muted-foreground">強制担当者</span>
+            <select value={pf.forcedStaffId} onChange={(e) => setpf({ forcedStaffId: e.target.value })} className="mt-0.5 h-8 w-full rounded-md border border-input bg-card px-2 text-xs">
+              <option value="">指定なし</option>
+              {STAFF.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </label>
+        </div>
+        <label className="mt-2 block">
+          <span className="text-[10px] text-muted-foreground">自動付与タグ（カンマ区切り）</span>
+          <input value={pf.autoTags} onChange={(e) => setpf({ autoTags: e.target.value })} placeholder="広告, 矯正訴求, Meta経由" className="mt-0.5 h-8 w-full rounded-md border border-input bg-card px-2 text-xs" />
+        </label>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <Field label="個人情報入力テンプレ" value={pf.piTpl} onChange={(x) => setpf({ piTpl: x })} options={PI_TEMPLATES} />
+          <Field label="確認画面テンプレ" value={pf.cfTpl} onChange={(x) => setpf({ cfTpl: x })} options={CONFIRM_TEMPLATES} />
+          <Field label="サンクスページテンプレ" value={pf.thTpl} onChange={(x) => setpf({ thTpl: x })} options={THANKS_TEMPLATES} />
+          <Field label="リマインドテンプレ" value={pf.rmTpl} onChange={(x) => setpf({ rmTpl: x })} options={REMINDER_TEMPLATES} />
+        </div>
+      </div>
+      </div>
+
       <div className="space-y-3">
         <div className="rounded-xl border border-border bg-card p-4">
           <div className="mb-1 text-xs font-semibold text-muted-foreground">生成されるURL</div>

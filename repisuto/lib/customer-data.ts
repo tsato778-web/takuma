@@ -250,3 +250,62 @@ export const CROSS_ANALYSIS = [
   { label: "Instagram × 初回フェイシャル", metric: "平均LTV", value: "¥76,000" },
   { label: "紹介 × スタッフA", metric: "リピート率", value: "82%" },
 ];
+
+// ---- メニュー利用履歴（前回利用日・利用回数・前回担当） ----
+// 予約画面で「前回利用：YYYY/MM/DD」などをメニュー横に出すための集計。
+export interface MenuUsage {
+  lastDate: string;
+  count: number;
+  lastStaffId?: string;
+}
+
+// 「カット + カラー」のような表示名から menuId 配列を逆引き
+function menuIdsFromLabel(label: string): string[] {
+  return label
+    .split("+")
+    .map((s) => s.trim())
+    .map((n) => MENUS.find((m) => m.name === n)?.id)
+    .filter((x): x is string => !!x);
+}
+
+export function menuUsageMap(c: Customer): Record<string, MenuUsage> {
+  const out: Record<string, MenuUsage> = {};
+  for (const v of visitHistory(c)) {
+    for (const id of menuIdsFromLabel(v.menus)) {
+      const cur = out[id];
+      if (!cur || v.date > cur.lastDate) {
+        out[id] = { lastDate: v.date, count: (cur?.count ?? 0) + 1, lastStaffId: v.staffId };
+      } else {
+        out[id] = { ...cur, count: cur.count + 1 };
+      }
+    }
+  }
+  return out;
+}
+
+// 「前回と同じ内容で予約」用の最終来店要約（メニューID配列＋担当）
+export interface LastVisitSummary {
+  date: string;
+  menuIds: string[];
+  staffId: string;
+  staffName: string;
+}
+export function lastVisitSummary(c: Customer): LastVisitSummary | null {
+  const vs = visitHistory(c);
+  if (vs.length === 0) return null;
+  const v = vs[0];
+  const ids = menuIdsFromLabel(v.menus);
+  if (ids.length === 0) return null;
+  return { date: v.date, menuIds: ids, staffId: v.staffId, staffName: v.staffName };
+}
+
+// 顧客が保有する回数券で消化できるメニュー（名称マッチ・残数>0）
+export function ticketUsableMenuIds(c: Customer): { ticketId: string; menuIds: string[] }[] {
+  const out: { ticketId: string; menuIds: string[] }[] = [];
+  for (const t of c.tickets) {
+    if (t.remaining <= 0) continue;
+    const ids = MENUS.filter((m) => t.menus.includes(m.name) || m.name.includes(t.menus)).map((m) => m.id);
+    if (ids.length) out.push({ ticketId: t.id, menuIds: ids });
+  }
+  return out;
+}
