@@ -31,6 +31,8 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { BRANDS } from "@/lib/mock-data";
+import { useBrand } from "@/lib/brand-context";
 
 type Leaf = { label: string; href: string };
 type NavItem = { label: string; icon: typeof CalendarDays; href?: string; children?: Leaf[] };
@@ -80,6 +82,7 @@ const NAV: NavItem[] = [
     label: "基本マスター",
     icon: Database,
     children: [
+      { label: "企業マスター", href: "/master/companies" },
       { label: "ブランドマスター", href: "/master/brands" },
       { label: "店舗マスター", href: "/master/stores" },
       { label: "顧客タグマスター", href: "/master/customer-tags" },
@@ -114,9 +117,11 @@ export function AppSidebar() {
         </div>
         <div className="leading-tight">
           <div className="text-sm font-semibold tracking-wide">リピスト</div>
-          <div className="text-[10px] text-muted-foreground">再来特化型 CRM</div>
+          <div className="text-[10px] text-muted-foreground">再来率向上CRM</div>
         </div>
       </div>
+
+      <BrandSwitcher />
 
       <nav className="thin-scrollbar flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
         {NAV.map((item) => (item.children ? <Group key={item.label} item={item} isActive={isActive} /> : <TopLink key={item.label} item={item} active={isActive(item.href!)} />))}
@@ -133,6 +138,36 @@ export function AppSidebar() {
       </div>
     </aside>
   );
+}
+
+function BrandSwitcher() {
+  const { brand, setBrandCode } = useBrand();
+  return (
+    <div className="shrink-0 border-y border-border bg-secondary/30 px-3 py-2">
+      <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">運用中のブランド</div>
+      <select
+        value={brand.code}
+        onChange={(e) => setBrandCode(e.target.value)}
+        className="mt-1 h-7 w-full rounded-md border border-input bg-card px-2 text-[11px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {BRANDS.map((b) => (
+          <option key={b.code} value={b.code}>
+            {b.code}・{b.name}
+          </option>
+        ))}
+      </select>
+      <div className="mt-1 text-[9px] text-muted-foreground">企業 {brand.companyCode} ／ {industryLabel(brand.industryPreset)}</div>
+    </div>
+  );
+}
+
+function industryLabel(p?: string): string {
+  return p === "beauty" ? "美容（雛形）"
+    : p === "chiropractic" ? "整体（雛形）"
+    : p === "esthetic" ? "エステ（雛形）"
+    : p === "pilates" ? "ピラティス（雛形）"
+    : p === "membership" ? "会員制（雛形）"
+    : "カスタム";
 }
 
 function TopLink({ item, active }: { item: NavItem; active: boolean }) {

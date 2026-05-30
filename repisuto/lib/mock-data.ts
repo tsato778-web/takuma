@@ -30,27 +30,94 @@ export const MENU_COLOR: Record<MenuColor, { tint: string; ring: string; dot: st
   slate: { tint: "bg-card", ring: "ring-border", dot: "bg-slate-400" },
 };
 
-export interface Store {
-  id: string;
-  name: string;
-  code: string; // 店舗コード S0001（システム全体で一意・永続）
-  brandCode: string; // 所属企業コード C0001
-}
-
-// 企業（マルチテナント前提）。企業コード C0001 はシステム全体で一意・永続。
-export interface Brand {
+// 企業（最上位）。企業コード C0001 はシステム全体で一意・永続。
+export interface Company {
   code: string; // C0001
   name: string;
 }
 
-export const BRANDS: Brand[] = [
-  { code: "C0001", name: "リピストビューティー" },
+export const COMPANIES: Company[] = [
+  { code: "C0001", name: "リピスト株式会社" },
 ];
+
+// ブランド（業種ではなく「再来率向上」を目的とする運用単位）。
+// 1企業 N ブランド。各ブランドが独自のKPI/予約モード/通知テンプレを持つ。
+export interface BrandBookingConfig {
+  requiresStore: boolean; // 店舗選択を必須にするか
+  requiresStaff: boolean; // 担当選択を必須にするか
+  allowMultiAssign: boolean; // メニュー別の複数担当割当を許可
+  slotGranularity: 15 | 30 | 60; // ◯△× 表のスロット粒度（分）
+  menuRequired: boolean; // メニュー選択必須か
+}
+
+export interface BrandKpi {
+  key: string; // KPIカタログのキー
+  target: number; // 目標値（rate=0-1, count/yen=絶対値）
+  warn: number; // 警告値
+  order: number; // 表示順
+  enabled: boolean;
+}
+
+export type IndustryPreset = "beauty" | "chiropractic" | "esthetic" | "pilates" | "membership" | "custom";
+
+export interface Brand {
+  code: string; // B0001（システム全体で一意・永続）
+  companyCode: string; // C0001
+  name: string;
+  industryPreset?: IndustryPreset; // 雛形（初期値のみ・編集可能）
+  bookingConfig: BrandBookingConfig;
+  kpis: BrandKpi[]; // ホーム画面に表示するKPIと並び順（ブランドごと自由）
+}
+
+export const BRANDS: Brand[] = [
+  {
+    code: "B0001",
+    companyCode: "C0001",
+    name: "リピストビューティー",
+    industryPreset: "beauty",
+    bookingConfig: { requiresStore: true, requiresStaff: true, allowMultiAssign: true, slotGranularity: 30, menuRequired: true },
+    kpis: [
+      { key: "repeat_rate", target: 0.7, warn: 0.5, order: 1, enabled: true },
+      { key: "churn_risk", target: 3, warn: 6, order: 2, enabled: true },
+      { key: "review_rate", target: 0.5, warn: 0.3, order: 3, enabled: true },
+      { key: "referral_count", target: 5, warn: 2, order: 4, enabled: true },
+    ],
+  },
+  {
+    code: "B0002",
+    companyCode: "C0001",
+    name: "リピストヘルス（整体）",
+    industryPreset: "chiropractic",
+    bookingConfig: { requiresStore: true, requiresStaff: true, allowMultiAssign: false, slotGranularity: 30, menuRequired: true },
+    kpis: [
+      { key: "repeat_rate", target: 0.75, warn: 0.55, order: 1, enabled: true },
+      { key: "churn_risk", target: 2, warn: 5, order: 2, enabled: true },
+      { key: "ltv_avg", target: 80000, warn: 50000, order: 3, enabled: true },
+      { key: "member_rate", target: 0.4, warn: 0.2, order: 4, enabled: true },
+    ],
+  },
+];
+
+// 店舗。code T0001、brand 必須。住所・最寄駅・写真など店舗カードの情報を持つ。
+export interface StoreProfile {
+  address: string;
+  nearestStation: string;
+  walkMin: number;
+  phone: string;
+  photoUrls: string[];
+}
+export interface Store {
+  id: string;
+  name: string;
+  code: string; // 店舗コード T0001（システム全体で一意・永続）
+  brandCode: string; // 所属ブランドコード B0001
+  profile: StoreProfile;
+}
 
 export interface Staff {
   id: string;
   storeId: string;
-  staffNo: string; // 社員番号(システム全体で一意・退職後も保持) 例 S0001
+  staffNo: string; // 社員番号 S00001（システム全体で一意・退職後も保持・欠番なし）
   name: string;
   kana: string;
   color: string; // 予約台帳の色 (hex)
@@ -73,7 +140,7 @@ export interface Ticket {
 export interface Customer {
   id: string;
   storeId: string;
-  customerNo: number; // 顧客No(カルテ番号)。表示は4桁ゼロ埋め
+  customerNo: number; // 顧客No。表示は U000001（6桁ゼロ埋め＋Uプレフィックス・永続・削除不可）
   name: string;
   kana: string;
   phone: string;
@@ -178,26 +245,74 @@ export interface Assignment {
   share?: number; // 売上配分(0-1)。補助はnull/0
 }
 
-export const STORE: Store = { id: "store_shibuya", name: "渋谷店", code: "S0001", brandCode: "C0001" };
+// 店舗コードは T0001 形式（システム全体で一意・永続・欠番なし）。
+export const STORE: Store = {
+  id: "store_shibuya",
+  name: "渋谷店",
+  code: "T0001",
+  brandCode: "B0001",
+  profile: {
+    address: "東京都渋谷区道玄坂2-1-1 リピストビル5F",
+    nearestStation: "JR渋谷駅",
+    walkMin: 3,
+    phone: "03-1234-5678",
+    photoUrls: [
+      "https://images.unsplash.com/photo-1560066984-138dadb4c035?w=400&q=70",
+      "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=400&q=70",
+    ],
+  },
+};
 export const STORES: Store[] = [
   STORE,
-  { id: "store_shinjuku", name: "新宿店", code: "S0002", brandCode: "C0001" },
-  { id: "store_ginza", name: "銀座店", code: "S0003", brandCode: "C0001" },
+  {
+    id: "store_shinjuku",
+    name: "新宿店",
+    code: "T0002",
+    brandCode: "B0001",
+    profile: { address: "東京都新宿区西新宿1-2-3", nearestStation: "JR新宿駅 南口", walkMin: 5, phone: "03-2345-6789", photoUrls: [] },
+  },
+  {
+    id: "store_ginza",
+    name: "銀座店",
+    code: "T0003",
+    brandCode: "B0001",
+    profile: { address: "東京都中央区銀座5-6-7", nearestStation: "東京メトロ銀座駅", walkMin: 2, phone: "03-3456-7890", photoUrls: [] },
+  },
+  {
+    id: "store_omotesando",
+    name: "表参道院",
+    code: "T0004",
+    brandCode: "B0002",
+    profile: { address: "東京都港区南青山3-4-5", nearestStation: "東京メトロ表参道駅 B2出口", walkMin: 4, phone: "03-4567-8901", photoUrls: [] },
+  },
 ];
 
 // スタッフ番号 ST00001 はシステム全体で一意・退職後も永続保持（売上/予約/カルテと
 // 永続的に紐付くため、削除不可。退職は active=false の論理削除で表現する）。
 export const STAFF: Staff[] = [
-  { id: "stf_tanaka", storeId: STORE.id, staffNo: "ST00001", name: "田中 美咲", kana: "タナカ ミサキ", color: "#0ea5b7", acceptsNomination: true, active: true, menuIds: ["menu_cut", "menu_color", "menu_perm", "menu_treat", "menu_spa", "menu_face", "menu_vip"] },
-  { id: "stf_sato", storeId: STORE.id, staffNo: "ST00002", name: "佐藤 健", kana: "サトウ ケン", color: "#7c6df2", acceptsNomination: true, active: true, menuIds: ["menu_cut", "menu_color", "menu_perm", "menu_treat"] },
-  { id: "stf_suzuki", storeId: STORE.id, staffNo: "ST00003", name: "鈴木 葵", kana: "スズキ アオイ", color: "#e8739a", acceptsNomination: true, active: true, menuIds: ["menu_cut", "menu_color", "menu_treat", "menu_spa", "menu_face", "menu_dx"] },
-  { id: "stf_takahashi", storeId: STORE.id, staffNo: "ST00004", name: "高橋 涼", kana: "タカハシ リョウ", color: "#f0a13b", acceptsNomination: false, active: true, menuIds: ["menu_cut", "menu_treat", "menu_spa"] },
+  { id: "stf_tanaka", storeId: STORE.id, staffNo: "S00001", name: "田中 美咲", kana: "タナカ ミサキ", color: "#0ea5b7", acceptsNomination: true, active: true, menuIds: ["menu_cut", "menu_color", "menu_perm", "menu_treat", "menu_spa", "menu_face", "menu_vip"] },
+  { id: "stf_sato", storeId: STORE.id, staffNo: "S00002", name: "佐藤 健", kana: "サトウ ケン", color: "#7c6df2", acceptsNomination: true, active: true, menuIds: ["menu_cut", "menu_color", "menu_perm", "menu_treat"] },
+  { id: "stf_suzuki", storeId: STORE.id, staffNo: "S00003", name: "鈴木 葵", kana: "スズキ アオイ", color: "#e8739a", acceptsNomination: true, active: true, menuIds: ["menu_cut", "menu_color", "menu_treat", "menu_spa", "menu_face", "menu_dx"] },
+  { id: "stf_takahashi", storeId: STORE.id, staffNo: "S00004", name: "高橋 涼", kana: "タカハシ リョウ", color: "#f0a13b", acceptsNomination: false, active: true, menuIds: ["menu_cut", "menu_treat", "menu_spa"] },
 ];
 
 let staffSeq = STAFF.length;
 export function nextStaffNo(): string {
   staffSeq += 1;
-  return `ST${String(staffSeq).padStart(5, "0")}`;
+  return `S${String(staffSeq).padStart(5, "0")}`;
+}
+
+// ---- 中央採番 service（欠番なし・永続）----
+// すべてのコード採番はここを通す。退会/退職後も既存コードは保持・再利用しない。
+let companySeq = COMPANIES.length;
+let brandSeq = BRANDS.length;
+let storeSeq = STORES.length;
+export function nextCompanyCode(): string { companySeq += 1; return `C${String(companySeq).padStart(4, "0")}`; }
+export function nextBrandCode(): string { brandSeq += 1; return `B${String(brandSeq).padStart(4, "0")}`; }
+export function nextStoreCode(): string { storeSeq += 1; return `T${String(storeSeq).padStart(4, "0")}`; }
+// 顧客番号も同様（createCustomer 経由で自動採番）
+export function peekNextCustomerNo(): number {
+  return Math.max(0, ...CUSTOMERS.map((c) => c.customerNo)) + 1;
 }
 
 export const MENUS: Menu[] = [

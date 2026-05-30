@@ -17,7 +17,12 @@ import {
   Ticket as TicketIcon,
   History,
   Megaphone,
+  MapPin,
+  Train,
+  Phone,
 } from "lucide-react";
+
+import { useBrand } from "@/lib/brand-context";
 
 import { cn } from "@/lib/utils";
 import { PageShell, MockBadge, Chip } from "@/components/admin/page-shell";
@@ -80,6 +85,7 @@ const EMPTY_FORM: CustomerForm = { name: "", kana: "", phone: "", email: "", not
 
 export function CustomerBooking() {
   const today = React.useMemo(() => new Date(), []);
+  const { brand } = useBrand();
   const [step, setStep] = React.useState<Step>("select");
   const [menuIds, setMenuIds] = React.useState<string[]>([]);
   const [tab, setTab] = React.useState<"omakase" | "staff">("omakase");
@@ -241,13 +247,28 @@ export function CustomerBooking() {
           </select>
         </div>
 
-        {/* LINE風ヘッダー */}
+        {/* LINE風ヘッダー（ブランド × 店舗） */}
         <div className="rounded-t-2xl bg-gradient-to-br from-primary to-accent px-4 py-3 text-primary-foreground">
           <div className="flex items-center gap-2 text-[11px] opacity-90">
-            <Sparkles className="h-3.5 w-3.5" />リピスト ビューティー {STORE.name}
+            <Sparkles className="h-3.5 w-3.5" />{brand.name} ／ {STORE.name}
           </div>
           <div className="text-base font-semibold">かんたんWEB予約</div>
           {previewCustomer && <div className="mt-0.5 text-[11px] opacity-90">{previewCustomer.name} 様</div>}
+        </div>
+
+        {/* 店舗カード（広告流入で店舗を初めて知る顧客のため、住所・最寄駅・電話・写真を明示） */}
+        <div className="border-x border-border bg-card px-4 py-3">
+          {STORE.profile.photoUrls.length > 0 && (
+            <div className="-mx-4 mb-2 flex h-32 items-center justify-center overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={STORE.profile.photoUrls[0]} alt={STORE.name} className="h-full w-full object-cover" />
+            </div>
+          )}
+          <div className="space-y-1 text-[11px]">
+            <div className="flex items-start gap-1 text-foreground"><MapPin className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />{STORE.profile.address}</div>
+            <div className="flex items-center gap-1 text-muted-foreground"><Train className="h-3 w-3 shrink-0" />{STORE.profile.nearestStation} 徒歩 {STORE.profile.walkMin} 分</div>
+            <div className="flex items-center gap-1 text-muted-foreground"><Phone className="h-3 w-3 shrink-0" />{STORE.profile.phone}</div>
+          </div>
         </div>
 
         {/* 広告リンク経由バナー（リンクがある時のみ） */}
@@ -405,21 +426,19 @@ function SelectStep(props: {
           </div>
         )}
         <div className="flex flex-wrap gap-1.5">
-          {MENUS.map((m) => {
+          {/* 強制リンクでメニュー固定の場合、対象外メニューは非表示にする */}
+          {(lockMenu ? MENUS.filter((m) => menuIds.includes(m.id)) : MENUS).map((m) => {
             const on = menuIds.includes(m.id);
             const pol = nominationOf(m);
             const u = usage[m.id];
-            const disabled = lockMenu && !on;
             return (
               <button
                 key={m.id}
                 type="button"
-                disabled={disabled}
                 onClick={() => toggleMenu(m.id)}
                 className={cn(
                   "rounded-lg border px-2.5 py-1.5 text-left text-xs font-medium transition-colors",
-                  on ? "border-primary bg-primary/10 text-primary" : "border-border bg-card text-muted-foreground hover:bg-secondary",
-                  disabled && "cursor-not-allowed opacity-50"
+                  on ? "border-primary bg-primary/10 text-primary" : "border-border bg-card text-muted-foreground hover:bg-secondary"
                 )}
               >
                 <span className="flex items-center gap-1">
@@ -436,6 +455,9 @@ function SelectStep(props: {
             );
           })}
         </div>
+        {lockMenu && (
+          <p className="mt-1 text-[10px] text-muted-foreground">※ 広告リンク経由のため、このメニューが固定されています（他メニューは選択できません）。</p>
+        )}
       </Section>
 
       {/* 2. 担当（広告リンクで担当欄非表示の場合はスキップ） */}
