@@ -455,7 +455,7 @@ export function ReservationBoard() {
               <div
                 className="sticky left-0 z-20 flex shrink-0 items-center gap-2 border-b border-r border-border bg-card px-3"
                 style={{ width: LABEL_W }}
-                title={`勤務 ${Math.round(st.workMin / 60)}h ／ 休憩・ブロック ${st.blockMin}分 ／ 稼働可能 ${Math.round(st.availMin / 6) / 10}h ／ 予約 ${st.bookedMin}分 ／ 稼働率 ${st.rate}%`}
+                title={`勤務 ${Math.round(st.workMin / 60)}h ／ 休憩・ブロック ${st.blockMin}分 ／ 予約 ${st.bookedMin}分`}
               >
                 <span
                   className="h-9 w-1.5 rounded-full"
@@ -468,7 +468,7 @@ export function ReservationBoard() {
                     {s.acceptsNomination ? "指名可" : "指名不可"}
                   </div>
                   <div className="mt-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
-                    予約{st.count}件 ・ 稼働<span className={st.rate >= 70 ? "text-emerald-600" : st.rate >= 40 ? "text-foreground" : "text-amber-600"}>{st.rate}%</span>
+                    予約{st.count}件
                   </div>
                 </div>
               </div>

@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Home,
   CalendarDays,
   CalendarCheck,
   Users,
@@ -12,6 +13,8 @@ import {
   Ticket,
   MessageCircle,
   BarChart3,
+  Repeat,
+  AlertTriangle,
   Link2,
   Database,
   UserCog,
@@ -33,6 +36,9 @@ type Leaf = { label: string; href: string };
 type NavItem = { label: string; icon: typeof CalendarDays; href?: string; children?: Leaf[] };
 
 const NAV: NavItem[] = [
+  { label: "ホーム", icon: Home, href: "/" },
+  { label: "次回予約率", icon: Repeat, href: "/repeat" },
+  { label: "離脱リスク管理", icon: AlertTriangle, href: "/churn-risk" },
   { label: "予約台帳", icon: CalendarDays, href: "/reservations" },
   { label: "お客様予約（◯×）", icon: CalendarCheck, href: "/booking" },
   { label: "顧客", icon: Users, href: "/customers" },

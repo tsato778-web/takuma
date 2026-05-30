@@ -33,7 +33,19 @@ export const MENU_COLOR: Record<MenuColor, { tint: string; ring: string; dot: st
 export interface Store {
   id: string;
   name: string;
+  code: string; // 店舗コード S0001（システム全体で一意・永続）
+  brandCode: string; // 所属企業コード C0001
 }
+
+// 企業（マルチテナント前提）。企業コード C0001 はシステム全体で一意・永続。
+export interface Brand {
+  code: string; // C0001
+  name: string;
+}
+
+export const BRANDS: Brand[] = [
+  { code: "C0001", name: "リピストビューティー" },
+];
 
 export interface Staff {
   id: string;
@@ -166,24 +178,26 @@ export interface Assignment {
   share?: number; // 売上配分(0-1)。補助はnull/0
 }
 
-export const STORE: Store = { id: "store_shibuya", name: "渋谷店" };
+export const STORE: Store = { id: "store_shibuya", name: "渋谷店", code: "S0001", brandCode: "C0001" };
 export const STORES: Store[] = [
   STORE,
-  { id: "store_shinjuku", name: "新宿店" },
-  { id: "store_ginza", name: "銀座店" },
+  { id: "store_shinjuku", name: "新宿店", code: "S0002", brandCode: "C0001" },
+  { id: "store_ginza", name: "銀座店", code: "S0003", brandCode: "C0001" },
 ];
 
+// スタッフ番号 ST00001 はシステム全体で一意・退職後も永続保持（売上/予約/カルテと
+// 永続的に紐付くため、削除不可。退職は active=false の論理削除で表現する）。
 export const STAFF: Staff[] = [
-  { id: "stf_tanaka", storeId: STORE.id, staffNo: "S0001", name: "田中 美咲", kana: "タナカ ミサキ", color: "#0ea5b7", acceptsNomination: true, active: true, menuIds: ["menu_cut", "menu_color", "menu_perm", "menu_treat", "menu_spa", "menu_face", "menu_vip"] },
-  { id: "stf_sato", storeId: STORE.id, staffNo: "S0002", name: "佐藤 健", kana: "サトウ ケン", color: "#7c6df2", acceptsNomination: true, active: true, menuIds: ["menu_cut", "menu_color", "menu_perm", "menu_treat"] },
-  { id: "stf_suzuki", storeId: STORE.id, staffNo: "S0003", name: "鈴木 葵", kana: "スズキ アオイ", color: "#e8739a", acceptsNomination: true, active: true, menuIds: ["menu_cut", "menu_color", "menu_treat", "menu_spa", "menu_face", "menu_dx"] },
-  { id: "stf_takahashi", storeId: STORE.id, staffNo: "S0004", name: "高橋 涼", kana: "タカハシ リョウ", color: "#f0a13b", acceptsNomination: false, active: true, menuIds: ["menu_cut", "menu_treat", "menu_spa"] },
+  { id: "stf_tanaka", storeId: STORE.id, staffNo: "ST00001", name: "田中 美咲", kana: "タナカ ミサキ", color: "#0ea5b7", acceptsNomination: true, active: true, menuIds: ["menu_cut", "menu_color", "menu_perm", "menu_treat", "menu_spa", "menu_face", "menu_vip"] },
+  { id: "stf_sato", storeId: STORE.id, staffNo: "ST00002", name: "佐藤 健", kana: "サトウ ケン", color: "#7c6df2", acceptsNomination: true, active: true, menuIds: ["menu_cut", "menu_color", "menu_perm", "menu_treat"] },
+  { id: "stf_suzuki", storeId: STORE.id, staffNo: "ST00003", name: "鈴木 葵", kana: "スズキ アオイ", color: "#e8739a", acceptsNomination: true, active: true, menuIds: ["menu_cut", "menu_color", "menu_treat", "menu_spa", "menu_face", "menu_dx"] },
+  { id: "stf_takahashi", storeId: STORE.id, staffNo: "ST00004", name: "高橋 涼", kana: "タカハシ リョウ", color: "#f0a13b", acceptsNomination: false, active: true, menuIds: ["menu_cut", "menu_treat", "menu_spa"] },
 ];
 
 let staffSeq = STAFF.length;
 export function nextStaffNo(): string {
   staffSeq += 1;
-  return `S${String(staffSeq).padStart(4, "0")}`;
+  return `ST${String(staffSeq).padStart(5, "0")}`;
 }
 
 export const MENUS: Menu[] = [
@@ -210,8 +224,10 @@ export const CUSTOMERS: Customer[] = [
   { id: "cus_ito", storeId: STORE.id, customerNo: 31, name: "伊藤 さくら", kana: "イトウ サクラ", phone: "090-5555-6666", gender: "F", birthday: "2002-03-25", firstSource: "Meta広告", registerMedia: "公式LINE", funnel: "Meta広告 → 初回カウンセリングフォーム → 初回フェイシャル", tags: ["新規"], messageTags: ["新規", "肩こり", "20代"], ltv: 9900, lastVisitDate: "2026-05-27", mainStaffId: "stf_suzuki", firstStaffId: "stf_suzuki", lastStaffId: "stf_suzuki", monthlyMember: { active: false }, lineLinked: false, tickets: [], visitCount: 1 },
 ];
 
+// 顧客番号 U000001 はシステム全体で一意・永続。削除不可（売上/予約/カルテと
+// 永続的に紐付くため、退会も論理削除のみ）。表示は6桁ゼロ埋め。
 export function formatCustomerNo(no: number): string {
-  return String(no).padStart(4, "0");
+  return `U${String(no).padStart(6, "0")}`;
 }
 
 // 電話番号で既存顧客を検索 (新規予約時の重複チェック)

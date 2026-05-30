@@ -13,6 +13,7 @@ import {
   Sparkles,
   AlertTriangle,
   Plus,
+  Send,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -459,6 +460,10 @@ function DoneView({ customer, result, onClose }: { customer?: Customer; result: 
   const [done, setDone] = React.useState<Set<string>>(new Set());
   const toggle = (k: string) => setDone((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
   const t = result.totals;
+  // 会計→口コミ→次回予約 の確認フロー（思想：会計はゴールではなくCRMの起点）
+  const [nextVisit, setNextVisit] = React.useState<"got" | "none" | "">("");
+  const [nvReason, setNvReason] = React.useState<"予定未定" | "検討中" | "不要" | "他店利用" | "">("");
+  const [reviewSent, setReviewSent] = React.useState({ google: false, hpb: false });
 
   const ACTIONS = [
     { k: "next", label: "次回予約", icon: CalendarPlus },
@@ -521,6 +526,53 @@ function DoneView({ customer, result, onClose }: { customer?: Customer; result: 
           {["顧客詳細", "KPI分析", "LINE/AI戦略"].map((x) => (
             <span key={x} className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700"><CheckCircle2 className="h-3 w-3" />{x}へ連携</span>
           ))}
+        </div>
+      </div>
+
+      {/* 次回予約 → 口コミ → 完了 の確認（再来率特化の起点動線） */}
+      <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
+        <div className="mb-2 text-xs font-semibold text-primary">次回予約 → 口コミ → 完了 の確認</div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {/* 次回予約 */}
+          <div>
+            <div className="mb-1 text-[11px] font-medium text-muted-foreground">次回予約</div>
+            <div className="flex gap-1.5">
+              <label className={cn("inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-xs", nextVisit === "got" ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-border")}>
+                <input type="radio" name="nv" checked={nextVisit === "got"} onChange={() => { setNextVisit("got"); setNvReason(""); }} className="h-3 w-3 accent-emerald-600" />
+                取得済
+              </label>
+              <label className={cn("inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-xs", nextVisit === "none" ? "border-amber-300 bg-amber-50 text-amber-700" : "border-border")}>
+                <input type="radio" name="nv" checked={nextVisit === "none"} onChange={() => setNextVisit("none")} className="h-3 w-3 accent-amber-600" />
+                未取得
+              </label>
+            </div>
+            {nextVisit === "none" && (
+              <div className="mt-1.5">
+                <div className="text-[10px] text-muted-foreground">未取得理由</div>
+                <div className="mt-0.5 flex flex-wrap gap-1">
+                  {(["予定未定", "検討中", "不要", "他店利用"] as const).map((r) => (
+                    <button key={r} type="button" onClick={() => setNvReason(r)} className={cn("rounded-full border px-2 py-0.5 text-[10px] font-medium", nvReason === r ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-secondary")}>
+                      {r}
+                    </button>
+                  ))}
+                </div>
+                {nvReason && <p className="mt-1 text-[10px] text-muted-foreground">理由を顧客タグ／KPI離反理由として保存（モック）</p>}
+              </div>
+            )}
+          </div>
+          {/* 口コミ送信 */}
+          <div>
+            <div className="mb-1 text-[11px] font-medium text-muted-foreground">口コミ送信</div>
+            <div className="flex flex-wrap gap-1.5">
+              <button type="button" onClick={() => setReviewSent((s) => ({ ...s, google: !s.google }))} className={cn("inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs", reviewSent.google ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-border hover:bg-secondary")}>
+                <Send className="h-3 w-3" />Google {reviewSent.google && "送信済"}
+              </button>
+              <button type="button" onClick={() => setReviewSent((s) => ({ ...s, hpb: !s.hpb }))} className={cn("inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs", reviewSent.hpb ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-border hover:bg-secondary")}>
+                <Send className="h-3 w-3" />ホットペッパー {reviewSent.hpb && "送信済"}
+              </button>
+            </div>
+            <p className="mt-1 text-[10px] text-muted-foreground">送信後は「口コミ依頼済」タグを顧客に自動付与（モック）。</p>
+          </div>
         </div>
       </div>
 
