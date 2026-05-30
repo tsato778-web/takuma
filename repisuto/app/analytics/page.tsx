@@ -19,6 +19,8 @@ import { mediaStat, nextVisitLabel } from "@/lib/customer-data";
 import { allCharts } from "@/lib/charts";
 import { DatePicker } from "@/components/reservation/date-picker";
 import { txnsInRange, aggregate, groupBy, dailySeries, paymentBreakdown, repeatBreakdown, type Txn } from "@/lib/analytics";
+import { useCurrentUser } from "@/lib/user-context";
+import { hasMin, ROLE_LABEL } from "@/lib/permissions";
 
 const yen = (n: number) => `¥${Math.round(n).toLocaleString()}`;
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -41,6 +43,22 @@ const AXES: { id: Axis; label: string }[] = [
 ];
 
 export default function AnalyticsPage() {
+  const { role } = useCurrentUser();
+  if (!hasMin(role, "STORE_ADMIN")) {
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        <div className="max-w-md rounded-xl border border-rose-200 bg-rose-50 p-6 text-center text-sm text-rose-700">
+          <div className="text-base font-semibold">KPI 分析の閲覧権限がありません</div>
+          <div className="mt-2 text-xs">このページは STORE_ADMIN 以上のロールが閲覧できます。スタッフ別比較・売上ランキングは現場スタッフへのプレッシャー回避のため管理者層のみに限定しています。</div>
+          <div className="mt-3 text-xs">現在のロール：{ROLE_LABEL[role]}</div>
+        </div>
+      </div>
+    );
+  }
+  return <AnalyticsContent />;
+}
+
+function AnalyticsContent() {
   const [view, setView] = React.useState<"manager" | "field">("manager");
   const [mode, setMode] = React.useState<Mode>("month");
   const [anchor, setAnchor] = React.useState(new Date(2026, 4, 27));

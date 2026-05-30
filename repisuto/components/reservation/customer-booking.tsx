@@ -118,12 +118,18 @@ export function CustomerBooking() {
 
   const policy = resolveBookingPolicy(menuIds);
   const forced = policy.forcedStaff;
-  const occ = occupancyOf(menuIds);
 
-  // 強制リンクによるロック
+  // ブランド予約モード（業種ではなくブランドごとに動的に切り替える）
+  const cfg = brand.bookingConfig;
+  const menuRequired = cfg.menuRequired;
+  // メニュー未選択でも予約可能なブランドはカウンセリング枠（30分）を既定占有とする
+  const DEFAULT_OCC_MIN = 30;
+  const occ = menuIds.length > 0 ? occupancyOf(menuIds) : DEFAULT_OCC_MIN;
+
+  // 強制リンクによるロック ＋ ブランド設定の合成
   const lockMenu = linkPrefill?.allowMenuChange === false;
-  const hideStaffSection = linkPrefill?.showStaffSelector === false;
-  const linkBlocksNomination = linkPrefill?.allowNomination === false;
+  const hideStaffSection = linkPrefill?.showStaffSelector === false || !cfg.requiresStaff;
+  const linkBlocksNomination = linkPrefill?.allowNomination === false || !cfg.requiresStaff;
 
   // メニュー変更時に担当タブ/選択を整える（リンクのロックも反映）
   const menuKey = menuIds.join(",");
@@ -339,6 +345,8 @@ export function CustomerBooking() {
                 hideStaffSection={!!hideStaffSection}
                 linkBlocksNomination={!!linkBlocksNomination}
                 usingTicketId={usingTicketId}
+                menuRequired={menuRequired}
+                slotGranularity={cfg.slotGranularity}
               />
             </div>
           )}
@@ -412,14 +420,19 @@ function SelectStep(props: {
   hideStaffSection: boolean;
   linkBlocksNomination: boolean;
   usingTicketId: string | null;
+  menuRequired: boolean;
+  slotGranularity: 15 | 30 | 60;
 }) {
-  const { menuIds, toggleMenu, policy, forced, tab, switchTab, staffId, pickStaff, weekStart, setWeekStart, today, effMode, poolEmpty, gridSelection, onPick, picked, occ, onNext, usage, lockMenu, hideStaffSection, linkBlocksNomination, usingTicketId } = props;
+  const { menuIds, toggleMenu, policy, forced, tab, switchTab, staffId, pickStaff, weekStart, setWeekStart, today, effMode, poolEmpty, gridSelection, onPick, picked, occ, onNext, usage, lockMenu, hideStaffSection, linkBlocksNomination, usingTicketId, menuRequired, slotGranularity } = props;
   const serviceMin = serviceMinOf(menuIds);
+  // メニュー必須でない場合、未選択でも日時グリッドを描画する（カウンセリング枠など）
+  const menuChosen = menuIds.length > 0;
+  const showGrid = menuChosen || !menuRequired;
 
   return (
     <div className="space-y-4">
       {/* 1. メニュー */}
-      <Section step={1} title="メニューを選ぶ" hint={lockMenu ? "このリンクではメニューが固定です" : "複数選択できます"}>
+      <Section step={1} title={menuRequired ? "メニューを選ぶ" : "メニューを選ぶ（任意）"} hint={lockMenu ? "このリンクではメニューが固定です" : menuRequired ? "複数選択できます" : "未選択でも予約できます（カウンセリング枠など）"}>
         {usingTicketId && (
           <div className="mb-1.5 flex items-center gap-1 rounded-md border border-accent/30 bg-accent/5 px-2 py-1 text-[11px] text-accent">
             <TicketIcon className="h-3 w-3" />回数券消化で予約 ・ 対応メニューのみ選択可
@@ -509,8 +522,8 @@ function SelectStep(props: {
       )}
 
       {/* 日時（◯△×） */}
-      <Section step={hideStaffSection ? 2 : 3} title="日時を選ぶ" hint={menuIds.length === 0 ? undefined : `所要約${serviceMin}分`}>
-        {menuIds.length === 0 ? (
+      <Section step={hideStaffSection ? 2 : 3} title="日時を選ぶ" hint={!menuChosen ? (menuRequired ? undefined : `所要約${occ}分（既定枠）`) : `所要約${serviceMin}分`}>
+        {!showGrid ? (
           <p className="rounded-lg border border-dashed border-border bg-secondary/20 px-3 py-4 text-center text-xs text-muted-foreground">まずメニューを選択してください</p>
         ) : poolEmpty ? (
           <p className="rounded-lg border border-dashed border-amber-200 bg-amber-50 px-3 py-4 text-center text-xs text-amber-700">この組み合わせに対応できる枠がありません。メニューや担当を見直してください。</p>
@@ -544,6 +557,8 @@ function SelectStep(props: {
               candidates={policy.candidates}
               selected={gridSelection}
               onPick={onPick}
+              slotGranularity={slotGranularity}
+              fallbackOccupancyMin={occ}
             />
           </>
         )}

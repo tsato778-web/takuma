@@ -5,19 +5,31 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { PageShell, MockBadge } from "@/components/admin/page-shell";
 import { repeatAll, repeatByStore, repeatByStaff, repeatByMedia, repeatByMenu, type RepeatRow } from "@/lib/repeat-rate";
+import { useCurrentUser } from "@/lib/user-context";
+import { hasMin } from "@/lib/permissions";
 
-const AXES = [
+type AxisDef = { id: "store" | "staff" | "media" | "menu"; label: string };
+const ALL_AXES: AxisDef[] = [
   { id: "store", label: "店舗別" },
   { id: "staff", label: "スタッフ別" },
   { id: "media", label: "媒体別" },
   { id: "menu", label: "メニュー別" },
-] as const;
-type AxisId = (typeof AXES)[number]["id"];
+];
+type AxisId = AxisDef["id"];
 
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 
 export default function RepeatPage() {
-  const [axis, setAxis] = React.useState<AxisId>("staff");
+  const { role } = useCurrentUser();
+  // スタッフ別比較は STORE_ADMIN 以上のみ（スタッフへのプレッシャー回避）
+  const canSeeStaff = hasMin(role, "STORE_ADMIN");
+  const axes = canSeeStaff ? ALL_AXES : ALL_AXES.filter((a) => a.id !== "staff");
+  const initial: AxisId = canSeeStaff ? "staff" : "store";
+  const [axis, setAxis] = React.useState<AxisId>(initial);
+  React.useEffect(() => {
+    // ロール降格時に staff タブから離脱
+    if (axis === "staff" && !canSeeStaff) setAxis("store");
+  }, [axis, canSeeStaff]);
   const all = repeatAll();
   const rows: RepeatRow[] =
     axis === "store" ? repeatByStore() :
@@ -43,19 +55,24 @@ export default function RepeatPage() {
       </div>
 
       {/* 軸タブ */}
-      <div className="mb-3 flex w-fit overflow-hidden rounded-md border border-border">
-        {AXES.map((a) => (
-          <button
-            key={a.id}
-            onClick={() => setAxis(a.id)}
-            className={cn(
-              "px-3 py-1.5 text-xs font-medium transition-colors",
-              axis === a.id ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-secondary"
-            )}
-          >
-            {a.label}
-          </button>
-        ))}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="flex w-fit overflow-hidden rounded-md border border-border">
+          {axes.map((a) => (
+            <button
+              key={a.id}
+              onClick={() => setAxis(a.id)}
+              className={cn(
+                "px-3 py-1.5 text-xs font-medium transition-colors",
+                axis === a.id ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-secondary"
+              )}
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
+        {!canSeeStaff && (
+          <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">スタッフ別比較は STORE_ADMIN 以上のみ閲覧可</span>
+        )}
       </div>
 
       <div className="thin-scrollbar overflow-x-auto rounded-xl border border-border bg-card">

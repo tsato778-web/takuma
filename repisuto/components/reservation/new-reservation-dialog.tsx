@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CustomerCombobox } from "./customer-combobox";
+import { useBrand } from "@/lib/brand-context";
 import { OPEN_MIN, CLOSE_MIN, minToLabel } from "@/lib/time";
 import {
   MENUS,
@@ -70,6 +71,7 @@ export function NewReservationDialog({
   daySlots,
   onCreate,
 }: Props) {
+  const { brand } = useBrand();
   const [kind, setKind] = React.useState<BlockKind>("RESERVATION");
   const [customerId, setCustomerId] = React.useState<string | null>(null);
   const [menuIds, setMenuIds] = React.useState<string[]>([]);
@@ -109,7 +111,8 @@ export function NewReservationDialog({
   }, [open, prefill]);
 
   const dupCandidates = custMode === "new" ? customersByPhone(nc.phone) : [];
-  const splitAssign = kind === "RESERVATION" && menuIds.length >= 2;
+  // ブランド設定で複数担当を抑制可能（業種に依存せずブランドごとに切替）
+  const splitAssign = kind === "RESERVATION" && menuIds.length >= 2 && brand.bookingConfig.allowMultiAssign;
   const menuStaffOf = (mid: string) => menuStaff[mid] ?? staffId;
   const menuSlots = (() => {
     let t = start;

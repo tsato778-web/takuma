@@ -8,7 +8,6 @@ import { SEED_RESERVATIONS, dateKey, type Staff } from "@/lib/mock-data";
 import { isDateWithinOpening, workWindowFor, CURRENT_OPENING_RULE } from "@/lib/shifts";
 import { omakaseMark, staffMark, occupancyOf, type SlotMark } from "@/lib/booking";
 
-const SLOT = 15; // 行の粒度（分）
 const WD = ["日", "月", "火", "水", "木", "金", "土"];
 
 export interface GridSelection {
@@ -25,6 +24,8 @@ interface Props {
   candidates: Staff[];
   selected: GridSelection | null;
   onPick: (date: Date, start: number) => void;
+  slotGranularity?: 15 | 30 | 60; // ブランドごとの行粒度（既定15）
+  fallbackOccupancyMin?: number; // メニュー未選択時の既定占有（カウンセリング枠など）
 }
 
 function Glyph({ mark }: { mark: SlotMark }) {
@@ -33,9 +34,12 @@ function Glyph({ mark }: { mark: SlotMark }) {
   return <span className="text-[15px] font-bold leading-none text-muted-foreground/35">×</span>;
 }
 
-export function AvailabilityGrid({ weekStart, days, menuIds, mode, staffId, candidates, selected, onPick }: Props) {
+export function AvailabilityGrid({ weekStart, days, menuIds, mode, staffId, candidates, selected, onPick, slotGranularity = 15, fallbackOccupancyMin }: Props) {
   const today = React.useMemo(() => new Date(), []);
-  const occ = occupancyOf(menuIds);
+  const SLOT = slotGranularity;
+  // メニュー選択時はメニューから占有を計算、未選択時は fallback（既定30分等）
+  const occ = menuIds.length > 0 ? occupancyOf(menuIds) : (fallbackOccupancyMin ?? 0);
+  const explicitOcc = menuIds.length > 0 ? undefined : fallbackOccupancyMin;
 
   // 列（日付）ごとの受付可否・予約と、行（時刻）
   const cols = React.useMemo(() => {
@@ -56,13 +60,13 @@ export function AvailabilityGrid({ weekStart, days, menuIds, mode, staffId, cand
     const out: number[] = [];
     for (let t = OPEN_MIN; t <= CLOSE_MIN - SLOT; t += SLOT) out.push(t);
     return out;
-  }, []);
+  }, [SLOT]);
 
   function markAt(col: (typeof cols)[number], start: number): SlotMark {
     if (!col.accept) return "FULL";
     return mode === "staff" && staffId
-      ? staffMark(staffId, menuIds, col.d, start, col.dayRes)
-      : omakaseMark(menuIds, candidates, col.d, start, col.dayRes);
+      ? staffMark(staffId, menuIds, col.d, start, col.dayRes, explicitOcc)
+      : omakaseMark(menuIds, candidates, col.d, start, col.dayRes, explicitOcc);
   }
 
   return (

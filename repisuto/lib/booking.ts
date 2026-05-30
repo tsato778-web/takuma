@@ -78,14 +78,16 @@ export function remainingCapacity(
 }
 
 // おまかせ（店舗全体）の◯△×。staffPool = 割当候補。
+// explicitOccupancy = メニュー未選択でも判定したい時の既定占有分（カウンセリング枠など）。
 export function omakaseMark(
   menuIds: string[],
   staffPool: Staff[],
   date: Date,
   start: number,
-  dayReservations: Reservation[]
+  dayReservations: Reservation[],
+  explicitOccupancy?: number
 ): SlotMark {
-  const occ = occupancyOf(menuIds);
+  const occ = explicitOccupancy ?? occupancyOf(menuIds);
   const end = start + occ;
   if (occ <= 0 || end > CLOSE_MIN) return "FULL";
   const pool = staffPool.length;
@@ -98,15 +100,16 @@ export function omakaseMark(
   return scarce ? "FEW" : "OPEN";
 }
 
-// 指名（特定スタッフ）の◯△×
+// 指名（特定スタッフ）の◯△×。explicitOccupancy=既定占有分の上書き。
 export function staffMark(
   staffId: string,
   menuIds: string[],
   date: Date,
   start: number,
-  dayReservations: Reservation[]
+  dayReservations: Reservation[],
+  explicitOccupancy?: number
 ): SlotMark {
-  const occ = occupancyOf(menuIds);
+  const occ = explicitOccupancy ?? occupancyOf(menuIds);
   const end = start + occ;
   if (occ <= 0 || end > CLOSE_MIN) return "FULL";
   if (!menuIds.every((m) => staffHandlesMenu(staffId, m))) return "FULL"; // 対応不可メニュー
