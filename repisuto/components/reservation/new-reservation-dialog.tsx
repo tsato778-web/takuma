@@ -181,11 +181,37 @@ export function NewReservationDialog({
     };
   }
 
-  function resolveCustomerId(): string | undefined {
+  async function resolveCustomerId(): Promise<string | undefined> {
     if (!isReservation) return undefined;
     if (custMode === "new") {
-      const c = createCustomer({ name: nc.name.trim(), kana: nc.kana.trim(), phone: nc.phone.trim(), firstSource: nc.source, staffId, dateKey });
-      return c.id;
+      // 電話予約からの新規顧客：DB へ POST（永続採番）＋ ローカルモックにも反映してUI即時更新
+      const genId = `cus${Date.now()}`;
+      // ローカルモックへは常に投入（他ページの表示互換）
+      const mock = createCustomer({ id: genId, name: nc.name.trim(), kana: nc.kana.trim(), phone: nc.phone.trim(), firstSource: nc.source, staffId, dateKey });
+      try {
+        await fetch("/api/customers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: genId,
+            storeId: STORE.id,
+            name: nc.name.trim(),
+            kana: nc.kana.trim(),
+            phone: nc.phone.trim(),
+            firstSource: nc.source,
+            registerMedia: "電話予約",
+            funnel: `${nc.source} → 電話予約`,
+            mainStaffId: staffId,
+            firstStaffId: staffId,
+            lastStaffId: staffId,
+            lastVisitDate: dateKey,
+          }),
+        });
+      } catch (e) {
+        // DB オフ時はローカルのみ保持（予約 POST 側は FK エラーになる可能性あり）
+        console.warn("POST /api/customers failed（ローカルモックのみに追加）", e);
+      }
+      return mock.id;
     }
     return customerId ?? undefined;
   }
@@ -195,9 +221,9 @@ export function NewReservationDialog({
     onOpenChange(false);
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!canSave) return;
-    const custId = resolveCustomerId();
+    const custId = await resolveCustomerId();
     const r = buildReservation(custId);
     const conflicts = findConflicts(r, daySlots);
     if (conflicts.length > 0) {

@@ -32,7 +32,6 @@ import {
 import {
   STAFF,
   STORES,
-  SEED_RESERVATIONS,
   CURRENT_USER,
   dateKey,
   occupiesSlot,
@@ -42,6 +41,7 @@ import {
   type AssignRole,
   type Reservation,
 } from "@/lib/mock-data";
+import { reservationsApi } from "@/lib/api-client";
 
 const LABEL_W = 150;
 const ROW_H = 78;
@@ -59,7 +59,10 @@ export function ReservationBoard() {
   const [date, setDate] = React.useState<Date>(() => new Date());
   const [gran, setGran] = React.useState<Granularity>(30);
   const [storeId, setStoreId] = React.useState(STORES[0].id);
-  const [reservations, setReservations] = React.useState<Reservation[]>(SEED_RESERVATIONS);
+  // 予約データは DB から fetch（Phase1: /api/reservations 経由）
+  const [reservations, setReservations] = React.useState<Reservation[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [dbError, setDbError] = React.useState<string | null>(null);
   const [createOpen, setCreateOpen] = React.useState(false);
   const [prefill, setPrefill] = React.useState<{ staffId: string; start: number } | null>(null);
   const [detailId, setDetailId] = React.useState<string | null>(null);
@@ -78,6 +81,31 @@ export function ReservationBoard() {
   const totalWidth = TOTAL_MIN * pxPerMin;
   const slotPx = slot * pxPerMin;
   const dk = dateKey(date);
+
+  // ---- 予約データの取得（日付/店舗が変わったら再フェッチ）----
+  React.useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setDbError(null);
+    reservationsApi
+      .list({ dateKey: dk, storeId })
+      .then((data) => {
+        if (!cancelled) setReservations(data);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setDbError(e.message ?? String(e));
+          // DB 未接続時は空表示（UI は生存）
+          setReservations([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dk, storeId]);
 
   // キャンセルも履歴として台帳に表示する (顧客予約画面側では空き扱い = occupiesSlot)
   const dayReservations = React.useMemo(
@@ -206,11 +234,16 @@ export function ReservationBoard() {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       if (d.moved) {
+        // 楽観的 UI 更新 → API に PATCH で永続化
         setReservations((rs) =>
           rs.map((r) =>
             r.id === d.id ? { ...r, start: d.curStart, end: d.curEnd, staffId: d.curStaff } : r
           )
         );
+        reservationsApi.patch(d.id, { start: d.curStart, end: d.curEnd, staffId: d.curStaff }).catch((e) => {
+          console.error("PATCH /api/reservations failed:", e);
+          setDbError(e.message ?? String(e));
+        });
         justDragged.current = true;
         window.setTimeout(() => {
           justDragged.current = false;
@@ -240,16 +273,34 @@ export function ReservationBoard() {
   }
 
   function handleCreate(r: Reservation) {
+    // 楽観的追加 → API に POST。返却された正規化レコードで置換。
     setReservations((rs) => [...rs, r]);
+    reservationsApi
+      .create(r)
+      .then((created) => {
+        setReservations((rs) => rs.map((x) => (x.id === r.id ? created : x)));
+      })
+      .catch((e) => {
+        console.error("POST /api/reservations failed:", e);
+        setDbError(e.message ?? String(e));
+      });
   }
 
   function updateRes(id: string, patch: Partial<Reservation>) {
     setReservations((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    reservationsApi.patch(id, patch).catch((e) => {
+      console.error(`PATCH /api/reservations/${id} failed:`, e);
+      setDbError(e.message ?? String(e));
+    });
   }
 
   function deleteRes(id: string) {
     setReservations((rs) => rs.filter((r) => r.id !== id));
     setDetailId(null);
+    reservationsApi.remove(id).catch((e) => {
+      console.error(`DELETE /api/reservations/${id} failed:`, e);
+      setDbError(e.message ?? String(e));
+    });
   }
 
   // ---- 通知 (store_id 単位で分離) ----
@@ -333,6 +384,12 @@ export function ReservationBoard() {
 
   return (
     <div className="flex h-full flex-col">
+      {/* DB 未接続時の非侵襲な通知（成功時は表示されない） */}
+      {dbError && (
+        <div className="border-b border-rose-200 bg-rose-50 px-5 py-1.5 text-[11px] text-rose-700">
+          DB エラー: {dbError} — .env の DATABASE_URL を設定し、`npm run db:push && npm run db:seed` を実行してください。
+        </div>
+      )}
       {/* ===== ツールバー ===== */}
       <div className="flex flex-wrap items-center gap-3 border-b border-border bg-card px-5 py-3">
         <div className="flex items-center gap-2">

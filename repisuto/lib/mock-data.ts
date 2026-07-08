@@ -352,12 +352,13 @@ export function customersByPhone(phone: string): Customer[] {
   return CUSTOMERS.filter((c) => c.phone.replace(/[^0-9]/g, "") === norm);
 }
 
-// 電話予約などで新規顧客を作成 (モック: 共有配列へ追加)
-export function createCustomer(p: { name: string; kana?: string; phone: string; firstSource?: string; staffId: string; dateKey: string }): Customer {
+// 電話予約などで新規顧客を作成 (モック: 共有配列へ追加)。
+// id を明示的に渡せば DB 側と同じ id を使う（POST /api/customers との整合）。
+export function createCustomer(p: { id?: string; name: string; kana?: string; phone: string; firstSource?: string; staffId: string; dateKey: string }): Customer {
   const no = Math.max(0, ...CUSTOMERS.map((c) => c.customerNo)) + 1;
   const src = p.firstSource || "電話";
   const c: Customer = {
-    id: `cus${Date.now()}`,
+    id: p.id ?? `cus${Date.now()}`,
     storeId: STORE.id,
     customerNo: no,
     name: p.name,

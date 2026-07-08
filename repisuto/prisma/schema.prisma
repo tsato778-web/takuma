@@ -1,0 +1,216 @@
+// リピスト Prisma スキーマ（Phase 1: 予約台帳の永続化）
+//
+// 予約台帳が扱う主要エンティティ（企業→ブランド→店舗→スタッフ／顧客／メニュー→予約→複数担当）を定義。
+// - 既存モックの ID を保持するため String @id を採用（例: "stf_tanaka" / "cus_yamada"）。
+// - 顧客No / スタッフNo / 店舗コード / ブランドコード / 企業コード は @unique（欠番なし・永続）。
+// - 日付関連（birthday, lastVisitDate, dateKey, validUntil 等）はモックの YYYY-MM-DD 文字列を
+//   そのまま保持して差分を最小化（Phase 2 で DateTime 化を検討）。
+// - `Assignment` は 1 予約に対する複数担当ブロック。予約削除で連鎖削除。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 企業（マルチテナント最上位）。code C0001。
+model Company {
+  code      String   @id
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  brands    Brand[]
+}
+
+// ブランド。code B0001。予約モードと KPI 設定は JSON でブランドごとに保持。
+model Brand {
+  code           String   @id
+  companyCode    String
+  name           String
+  industryPreset String?
+  bookingConfig  Json     // BrandBookingConfig
+  kpis           Json     // BrandKpi[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  company        Company  @relation(fields: [companyCode], references: [code])
+  stores         Store[]
+
+  @@index([companyCode])
+}
+
+// 店舗。code T0001。プロフィール（住所・最寄駅・電話・写真）は展開列で保持。
+model Store {
+  id             String   @id
+  code           String   @unique
+  brandCode      String
+  name           String
+  address        String
+  nearestStation String
+  walkMin        Int
+  phone          String
+  photoUrls      String[] @default([])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  brand          Brand         @relation(fields: [brandCode], references: [code])
+  staff          Staff[]
+  customers      Customer[]
+  menus          Menu[]
+  reservations   Reservation[]
+
+  @@index([brandCode])
+}
+
+// スタッフ。staffNo S00001 はシステム全体で一意・退職後も保持（active=false で論理削除）。
+model Staff {
+  id                String   @id
+  storeId           String
+  staffNo           String   @unique
+  name              String
+  kana              String
+  color             String
+  acceptsNomination Boolean  @default(true)
+  active            Boolean  @default(true)
+  menuIds           String[] @default([]) // 対応可能メニューID
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  store             Store         @relation(fields: [storeId], references: [id])
+  mainReservations  Reservation[] @relation("MainStaff")
+  assignments       Assignment[]
+
+  @@index([storeId])
+}
+
+// 顧客。customerNo は数値保持で 表示は U000001 形式にフォーマット（fmt は client 側）。
+// 退会後も customerNo・レコードは保持（archived: bool でソフトデリート想定）。
+model Customer {
+  id            String   @id
+  storeId       String
+  customerNo    Int      @unique
+  name          String
+  kana          String
+  phone         String
+  gender        String
+  birthday      String?
+  firstSource   String
+  registerMedia String
+  funnel        String
+  tags          String[] @default([])
+  messageTags   String[] @default([])
+  ltv           Int      @default(0)
+  lastVisitDate String?
+  nextVisitDate String?
+  nextVisitTime String?
+  mainStaffId   String
+  firstStaffId  String
+  lastStaffId   String
+  monthlyMember Json     // { active: bool, plan?: string }
+  lineLinked    Boolean  @default(false)
+  lineName      String?
+  visitCount    Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  store         Store         @relation(fields: [storeId], references: [id])
+  reservations  Reservation[]
+  tickets       Ticket[]
+
+  @@index([storeId])
+  @@index([customerNo])
+}
+
+// 回数券。顧客に紐付く。
+model Ticket {
+  id          String   @id
+  customerId  String
+  name        String
+  totalCount  Int
+  remaining   Int
+  durationMin Int
+  unitPrice   Int
+  validUntil  String
+  menus       String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+}
+
+// メニュー。ブランドで指名ポリシー・capacity・強制担当を切替。
+model Menu {
+  id            String   @id
+  storeId       String
+  name          String
+  durationMin   Int
+  intervalMin   Int      @default(0)
+  price         Int
+  color         String
+  capacity      Int?
+  nomination    String? // OPTIONAL | NONE | FORCED | DEDICATED
+  forcedStaffId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  store         Store    @relation(fields: [storeId], references: [id])
+
+  @@index([storeId])
+}
+
+// 予約（RESERVATION / BREAK / MEETING / BLOCK / OTHER を kind で表現）
+model Reservation {
+  id          String   @id
+  storeId     String
+  dateKey     String   // YYYY-MM-DD
+  kind        String   // RESERVATION | BREAK | MEETING | BLOCK | OTHER
+  customerId  String?
+  staffId     String   // 主担当
+  menuIds     String[] @default([])
+  label       String?
+  start       Int      // 0時からの分
+  end         Int      // 占有終了（= 施術+インターバル）
+  intervalMin Int      @default(0)
+  status      String   // CONFIRMED | ARRIVED | DONE | NO_SHOW | CANCELED
+  cancelType  String? // ADVANCE | SAME_DAY | NO_SHOW
+  source      String   // LINE | PHONE | WALK_IN | MANUAL
+  isNominated Boolean  @default(false)
+  paid        Boolean  @default(false)
+  hasChart    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  store       Store        @relation(fields: [storeId], references: [id])
+  customer    Customer?    @relation(fields: [customerId], references: [id])
+  mainStaff   Staff        @relation("MainStaff", fields: [staffId], references: [id])
+  assignments Assignment[]
+
+  @@index([storeId, dateKey])
+  @@index([dateKey])
+  @@index([staffId])
+  @@index([customerId])
+}
+
+// 複数担当ブロック（メニューごとの担当）。予約削除で連鎖削除。
+model Assignment {
+  id            String  @id @default(cuid())
+  reservationId String
+  staffId       String
+  role          String // MAIN | SUB | ASSIST
+  label         String
+  start         Int
+  end           Int
+  share         Float?
+
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  staff         Staff       @relation(fields: [staffId], references: [id])
+
+  @@index([reservationId])
+  @@index([staffId])
+}
