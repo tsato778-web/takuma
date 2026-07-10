@@ -1,0 +1,516 @@
+// MVP 予約台帳のモックデータ。schema.prisma の構造を簡略化して反映。
+// store_id 多店舗前提のため、すべてのエンティティは storeId を持つ。
+
+export type ReservationStatus =
+  | "CONFIRMED"
+  | "ARRIVED"
+  | "DONE"
+  | "NO_SHOW"
+  | "CANCELED";
+
+export type ReservationSource = "LINE" | "PHONE" | "WALK_IN" | "MANUAL";
+
+// キャンセル種別 (KPI分析用に保持)
+export type CancelType = "ADVANCE" | "SAME_DAY" | "NO_SHOW";
+export const CANCEL_TYPE_LABEL: Record<CancelType, string> = {
+  ADVANCE: "事前キャンセル",
+  SAME_DAY: "当日キャンセル",
+  NO_SHOW: "無断キャンセル",
+};
+
+// コース別カラー (淡い高級感トーン)
+export type MenuColor = "blue" | "purple" | "green" | "pink" | "teal" | "amber" | "slate";
+export const MENU_COLOR: Record<MenuColor, { tint: string; ring: string; dot: string }> = {
+  blue: { tint: "bg-sky-50/90", ring: "ring-sky-200", dot: "bg-sky-400" },
+  purple: { tint: "bg-violet-50/90", ring: "ring-violet-200", dot: "bg-violet-400" },
+  green: { tint: "bg-emerald-50/90", ring: "ring-emerald-200", dot: "bg-emerald-400" },
+  pink: { tint: "bg-pink-50/90", ring: "ring-pink-200", dot: "bg-pink-400" },
+  teal: { tint: "bg-teal-50/90", ring: "ring-teal-200", dot: "bg-teal-400" },
+  amber: { tint: "bg-amber-50/90", ring: "ring-amber-200", dot: "bg-amber-400" },
+  slate: { tint: "bg-card", ring: "ring-border", dot: "bg-slate-400" },
+};
+
+// 企業（最上位）。企業コード C0001 はシステム全体で一意・永続。
+export interface Company {
+  code: string; // C0001
+  name: string;
+}
+
+export const COMPANIES: Company[] = [
+  { code: "C0001", name: "リピスト株式会社" },
+];
+
+// ブランド（業種ではなく「再来率向上」を目的とする運用単位）。
+// 1企業 N ブランド。各ブランドが独自のKPI/予約モード/通知テンプレを持つ。
+export interface BrandBookingConfig {
+  requiresStore: boolean; // 店舗選択を必須にするか
+  requiresStaff: boolean; // 担当選択を必須にするか
+  allowMultiAssign: boolean; // メニュー別の複数担当割当を許可
+  slotGranularity: 15 | 30 | 60; // ◯△× 表のスロット粒度（分）
+  menuRequired: boolean; // メニュー選択必須か
+}
+
+export interface BrandKpi {
+  key: string; // KPIカタログのキー
+  target: number; // 目標値（rate=0-1, count/yen=絶対値）
+  warn: number; // 警告値
+  order: number; // 表示順
+  enabled: boolean;
+}
+
+export type IndustryPreset = "beauty" | "chiropractic" | "esthetic" | "pilates" | "membership" | "custom";
+
+export interface Brand {
+  code: string; // B0001（システム全体で一意・永続）
+  companyCode: string; // C0001
+  name: string;
+  industryPreset?: IndustryPreset; // 雛形（初期値のみ・編集可能）
+  bookingConfig: BrandBookingConfig;
+  kpis: BrandKpi[]; // ホーム画面に表示するKPIと並び順（ブランドごと自由）
+}
+
+export const BRANDS: Brand[] = [
+  {
+    code: "B0001",
+    companyCode: "C0001",
+    name: "リピストビューティー",
+    industryPreset: "beauty",
+    bookingConfig: { requiresStore: true, requiresStaff: true, allowMultiAssign: true, slotGranularity: 30, menuRequired: true },
+    kpis: [
+      { key: "repeat_rate", target: 0.7, warn: 0.5, order: 1, enabled: true },
+      { key: "churn_risk", target: 3, warn: 6, order: 2, enabled: true },
+      { key: "review_rate", target: 0.5, warn: 0.3, order: 3, enabled: true },
+      { key: "referral_count", target: 5, warn: 2, order: 4, enabled: true },
+    ],
+  },
+  {
+    code: "B0002",
+    companyCode: "C0001",
+    name: "リピストヘルス（整体）",
+    industryPreset: "chiropractic",
+    bookingConfig: { requiresStore: true, requiresStaff: true, allowMultiAssign: false, slotGranularity: 30, menuRequired: true },
+    kpis: [
+      { key: "repeat_rate", target: 0.75, warn: 0.55, order: 1, enabled: true },
+      { key: "churn_risk", target: 2, warn: 5, order: 2, enabled: true },
+      { key: "ltv_avg", target: 80000, warn: 50000, order: 3, enabled: true },
+      { key: "member_rate", target: 0.4, warn: 0.2, order: 4, enabled: true },
+    ],
+  },
+];
+
+// 店舗。code T0001、brand 必須。住所・最寄駅・写真など店舗カードの情報を持つ。
+export interface StoreProfile {
+  address: string;
+  nearestStation: string;
+  walkMin: number;
+  phone: string;
+  photoUrls: string[];
+}
+export interface Store {
+  id: string;
+  name: string;
+  code: string; // 店舗コード T0001（システム全体で一意・永続）
+  brandCode: string; // 所属ブランドコード B0001
+  profile: StoreProfile;
+}
+
+export interface Staff {
+  id: string;
+  storeId: string;
+  staffNo: string; // 社員番号 S00001（システム全体で一意・退職後も保持・欠番なし）
+  name: string;
+  kana: string;
+  color: string; // 予約台帳の色 (hex)
+  acceptsNomination: boolean;
+  active: boolean; // 在籍(false=退職・非表示)
+  menuIds: string[]; // 対応可能メニュー (空=全対応)
+}
+
+export interface Ticket {
+  id: string;
+  name: string;
+  totalCount: number; // 総回数
+  remaining: number; // 残回数
+  durationMin: number; // 1回あたりの時間 (45/60/90)
+  unitPrice: number; // 消化単価 (消化売上の計上額)
+  validUntil: string; // 有効期限 YYYY-MM-DD
+  menus: string; // 対応メニュー
+}
+
+export interface Customer {
+  id: string;
+  storeId: string;
+  customerNo: number; // 顧客No。表示は U000001（6桁ゼロ埋め＋Uプレフィックス・永続・削除不可）
+  name: string;
+  kana: string;
+  phone: string;
+  gender: "F" | "M";
+  birthday?: string; // 生年月日 YYYY-MM-DD
+  firstSource: string; // 初回媒体
+  registerMedia: string; // 登録メディア
+  funnel: string; // 流入経路(要約)
+  tags: string[]; // 顧客タグ
+  messageTags: string[]; // LINEメッセージタグ
+  ltv: number; // 累計売上
+  lastVisitDate: string; // 最終来店日
+  nextVisitDate?: string; // 次回予約(日付)
+  nextVisitTime?: string; // 次回予約(時刻 HH:MM)
+  mainStaffId: string; // 主担当
+  firstStaffId: string; // 初回担当
+  lastStaffId: string; // 前回担当
+  monthlyMember: { active: boolean; plan?: string }; // 月額会員状況
+  lineLinked: boolean; // LineLink の有無
+  lineName?: string; // LINE登録名
+  tickets: Ticket[]; // ACTIVE な回数券
+  visitCount: number;
+}
+
+// 登録メディア / 流入経路 / 媒体の選択肢 (フォーム・分析で共用)
+export const MEDIA_OPTIONS = ["Instagram", "Meta広告", "Google", "ホットペッパー", "紹介", "公式LINE", "店頭"];
+
+export interface Menu {
+  id: string;
+  storeId: string;
+  name: string;
+  durationMin: number; // 施術時間 (売上・コース表示はこちらを使用)
+  intervalMin: number; // 施術後のインターバル/準備時間 (台帳占有のみ)
+  price: number;
+  color: MenuColor;
+  capacity?: number; // 同時予約可能数 (席/設備の上限。未指定=対応スタッフ数で律速)
+  nomination?: NominationPolicy; // 指名ポリシー (未指定=OPTIONAL)
+  forcedStaffId?: string; // nomination=FORCED のときの強制担当
+}
+
+// メニュー別の指名可否 (お客様予約画面の担当選択を制御)
+export type NominationPolicy =
+  | "OPTIONAL" // 指名可能: お客様が担当を選べる / おまかせも可
+  | "NONE" // 指名不可: 担当選択なし。店舗側で割り当て
+  | "FORCED" // 強制指名: 選択時に特定スタッフが自動で担当
+  | "DEDICATED"; // 専用メニュー: 対応スタッフ(menuIds)のみ。他スタッフは予約不可
+export const NOMINATION_LABEL: Record<NominationPolicy, string> = {
+  OPTIONAL: "指名可能",
+  NONE: "指名不可",
+  FORCED: "強制指名",
+  DEDICATED: "専用メニュー",
+};
+export const nominationOf = (m: Menu | undefined): NominationPolicy => m?.nomination ?? "OPTIONAL";
+
+// 店舗設定。メニュー個別にインターバル未設定の場合はこの既定値を使用
+export const STORE_SETTINGS = {
+  defaultIntervalMin: 0,
+};
+
+export const INTERVAL_OPTIONS = [0, 5, 10, 15, 30];
+
+// 枠の種別。RESERVATION のみ顧客を伴う。他は「予約不可枠」(ダークアウト表示)
+export type BlockKind = "RESERVATION" | "BREAK" | "MEETING" | "BLOCK" | "OTHER";
+
+export interface Reservation {
+  id: string;
+  storeId: string;
+  dateKey: string; // YYYY-MM-DD
+  kind: BlockKind;
+  customerId?: string; // RESERVATION のみ
+  staffId: string;
+  menuIds: string[];
+  label?: string; // 予約以外の表示ラベル(その他/メモ)
+  start: number; // 0時からの分
+  end: number; // 占有終了 (= 施術 + インターバル)
+  intervalMin: number; // 末尾のインターバル/準備時間 (台帳占有のみ・売上には含めない)
+  status: ReservationStatus;
+  cancelType?: CancelType; // status=CANCELED のとき種別を保持 (KPI用)
+  source: ReservationSource;
+  isNominated: boolean;
+  paid: boolean; // 会計済みか (未会計表示用)
+  hasChart: boolean; // カルテ記入済みか (未カルテ表示用)
+  assignments?: Assignment[]; // 複数担当(担当分担)。未指定なら staffId 単独
+}
+
+export const BLOCK_KIND_LABEL: Record<Exclude<BlockKind, "RESERVATION">, string> = {
+  BREAK: "休憩",
+  MEETING: "MTG",
+  BLOCK: "BLOCK",
+  OTHER: "その他",
+};
+
+// 複数担当(担当分担)。1予約に複数の担当ブロックを持てる。
+export type AssignRole = "MAIN" | "SUB" | "ASSIST";
+export const ROLE_LABEL: Record<AssignRole, string> = { MAIN: "主担当", SUB: "サブ担当", ASSIST: "補助" };
+export interface Assignment {
+  staffId: string;
+  role: AssignRole;
+  label: string; // 担当メニュー/役割
+  start: number; // 0時からの分
+  end: number;
+  share?: number; // 売上配分(0-1)。補助はnull/0
+}
+
+// 店舗コードは T0001 形式（システム全体で一意・永続・欠番なし）。
+export const STORE: Store = {
+  id: "store_shibuya",
+  name: "渋谷店",
+  code: "T0001",
+  brandCode: "B0001",
+  profile: {
+    address: "東京都渋谷区道玄坂2-1-1 リピストビル5F",
+    nearestStation: "JR渋谷駅",
+    walkMin: 3,
+    phone: "03-1234-5678",
+    photoUrls: [
+      "https://images.unsplash.com/photo-1560066984-138dadb4c035?w=400&q=70",
+      "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=400&q=70",
+    ],
+  },
+};
+export const STORES: Store[] = [
+  STORE,
+  {
+    id: "store_shinjuku",
+    name: "新宿店",
+    code: "T0002",
+    brandCode: "B0001",
+    profile: { address: "東京都新宿区西新宿1-2-3", nearestStation: "JR新宿駅 南口", walkMin: 5, phone: "03-2345-6789", photoUrls: [] },
+  },
+  {
+    id: "store_ginza",
+    name: "銀座店",
+    code: "T0003",
+    brandCode: "B0001",
+    profile: { address: "東京都中央区銀座5-6-7", nearestStation: "東京メトロ銀座駅", walkMin: 2, phone: "03-3456-7890", photoUrls: [] },
+  },
+  {
+    id: "store_omotesando",
+    name: "表参道院",
+    code: "T0004",
+    brandCode: "B0002",
+    profile: { address: "東京都港区南青山3-4-5", nearestStation: "東京メトロ表参道駅 B2出口", walkMin: 4, phone: "03-4567-8901", photoUrls: [] },
+  },
+];
+
+// スタッフ番号 ST00001 はシステム全体で一意・退職後も永続保持（売上/予約/カルテと
+// 永続的に紐付くため、削除不可。退職は active=false の論理削除で表現する）。
+export const STAFF: Staff[] = [
+  { id: "stf_tanaka", storeId: STORE.id, staffNo: "S00001", name: "田中 美咲", kana: "タナカ ミサキ", color: "#0ea5b7", acceptsNomination: true, active: true, menuIds: ["menu_cut", "menu_color", "menu_perm", "menu_treat", "menu_spa", "menu_face", "menu_vip"] },
+  { id: "stf_sato", storeId: STORE.id, staffNo: "S00002", name: "佐藤 健", kana: "サトウ ケン", color: "#7c6df2", acceptsNomination: true, active: true, menuIds: ["menu_cut", "menu_color", "menu_perm", "menu_treat"] },
+  { id: "stf_suzuki", storeId: STORE.id, staffNo: "S00003", name: "鈴木 葵", kana: "スズキ アオイ", color: "#e8739a", acceptsNomination: true, active: true, menuIds: ["menu_cut", "menu_color", "menu_treat", "menu_spa", "menu_face", "menu_dx"] },
+  { id: "stf_takahashi", storeId: STORE.id, staffNo: "S00004", name: "高橋 涼", kana: "タカハシ リョウ", color: "#f0a13b", acceptsNomination: false, active: true, menuIds: ["menu_cut", "menu_treat", "menu_spa"] },
+];
+
+let staffSeq = STAFF.length;
+export function nextStaffNo(): string {
+  staffSeq += 1;
+  return `S${String(staffSeq).padStart(5, "0")}`;
+}
+
+// ---- 中央採番 service（欠番なし・永続）----
+// すべてのコード採番はここを通す。退会/退職後も既存コードは保持・再利用しない。
+let companySeq = COMPANIES.length;
+let brandSeq = BRANDS.length;
+let storeSeq = STORES.length;
+export function nextCompanyCode(): string { companySeq += 1; return `C${String(companySeq).padStart(4, "0")}`; }
+export function nextBrandCode(): string { brandSeq += 1; return `B${String(brandSeq).padStart(4, "0")}`; }
+export function nextStoreCode(): string { storeSeq += 1; return `T${String(storeSeq).padStart(4, "0")}`; }
+// 顧客番号も同様（createCustomer 経由で自動採番）
+export function peekNextCustomerNo(): number {
+  return Math.max(0, ...CUSTOMERS.map((c) => c.customerNo)) + 1;
+}
+
+export const MENUS: Menu[] = [
+  { id: "menu_cut", storeId: STORE.id, name: "カット", durationMin: 60, intervalMin: 0, price: 4400, color: "blue", nomination: "OPTIONAL" },
+  { id: "menu_color", storeId: STORE.id, name: "カラー", durationMin: 90, intervalMin: 15, price: 6600, color: "purple", nomination: "OPTIONAL" },
+  { id: "menu_perm", storeId: STORE.id, name: "パーマ", durationMin: 120, intervalMin: 15, price: 8800, color: "amber", nomination: "OPTIONAL" },
+  { id: "menu_treat", storeId: STORE.id, name: "トリートメント", durationMin: 30, intervalMin: 0, price: 3300, color: "teal", nomination: "NONE" }, // クイック追加: 指名不可・店舗割当
+  { id: "menu_spa", storeId: STORE.id, name: "ヘッドスパ", durationMin: 45, intervalMin: 10, price: 5500, color: "green", capacity: 2, nomination: "OPTIONAL" }, // スパ席2
+  { id: "menu_face", storeId: STORE.id, name: "フェイシャル", durationMin: 60, intervalMin: 10, price: 9900, color: "pink", capacity: 2, nomination: "OPTIONAL" }, // 個室2
+  // 強制指名: 選択した時点で田中が担当になる専用VIPコース
+  { id: "menu_vip", storeId: STORE.id, name: "田中スペシャルVIP", durationMin: 120, intervalMin: 15, price: 19800, color: "amber", nomination: "FORCED", forcedStaffId: "stf_tanaka" },
+  // 専用メニュー: 鈴木のみ対応 (他スタッフでは予約不可)
+  { id: "menu_dx", storeId: STORE.id, name: "小顔デザインスパ（鈴木）", durationMin: 90, intervalMin: 10, price: 13200, color: "green", nomination: "DEDICATED" },
+];
+
+export const CUSTOMERS: Customer[] = [
+  { id: "cus_kobayashi", storeId: STORE.id, customerNo: 3, name: "小林 真央", kana: "コバヤシ マオ", phone: "090-9999-0000", gender: "F", birthday: "1992-04-15", firstSource: "Instagram", registerMedia: "公式LINE", funnel: "Instagram → 初回フェイシャル → 回数券 → 月額会員", tags: ["VIP", "Google口コミ済"], messageTags: ["VIP", "乾燥肌", "30代"], ltv: 482000, lastVisitDate: "2026-05-10", nextVisitDate: "2026-06-02", nextVisitTime: "14:00", mainStaffId: "stf_suzuki", firstStaffId: "stf_suzuki", lastStaffId: "stf_tanaka", monthlyMember: { active: true, plan: "プレミアム会員 ¥22,000/月" }, lineLinked: true, lineName: "まお", tickets: [{ id: "tk_kob1", name: "スパ5回券", totalCount: 5, remaining: 4, durationMin: 45, unitPrice: 5000, validUntil: "2026-08-31", menus: "ヘッドスパ" }], visitCount: 21 },
+  { id: "cus_yamada", storeId: STORE.id, customerNo: 8, name: "山田 花子", kana: "ヤマダ ハナコ", phone: "090-1111-2222", gender: "F", birthday: "1983-08-22", firstSource: "Meta広告", registerMedia: "公式LINE", funnel: "Meta広告 → カウンセリングフォーム → カラー → 回数券", tags: ["VIP", "敏感肌"], messageTags: ["敏感肌", "カラー", "40代"], ltv: 256000, lastVisitDate: "2026-05-20", mainStaffId: "stf_tanaka", firstStaffId: "stf_tanaka", lastStaffId: "stf_tanaka", monthlyMember: { active: true, plan: "スタンダード会員 ¥11,000/月" }, lineLinked: true, lineName: "hanako🌸", tickets: [{ id: "tk_yam1", name: "カット10回券", totalCount: 10, remaining: 3, durationMin: 60, unitPrice: 4000, validUntil: "2026-12-31", menus: "カット" }], visitCount: 12 },
+  { id: "cus_takahashi", storeId: STORE.id, customerNo: 12, name: "高橋 健", kana: "タカハシ ケン", phone: "090-7777-8888", gender: "M", birthday: "1990-11-03", firstSource: "ホットペッパー", registerMedia: "Web予約", funnel: "ホットペッパー → 初回カット → カラー", tags: [], messageTags: ["カラー", "30代"], ltv: 132000, lastVisitDate: "2026-04-28", mainStaffId: "stf_sato", firstStaffId: "stf_sato", lastStaffId: "stf_suzuki", monthlyMember: { active: false }, lineLinked: true, lineName: "ケン", tickets: [{ id: "tk_tak1", name: "カラー6回券", totalCount: 6, remaining: 1, durationMin: 90, unitPrice: 6000, validUntil: "2026-07-31", menus: "カラー" }], visitCount: 8 },
+  { id: "cus_nakamura", storeId: STORE.id, customerNo: 15, name: "中村 ゆい", kana: "ナカムラ ユイ", phone: "090-3333-4444", gender: "F", birthday: "2003-06-10", firstSource: "Instagram", registerMedia: "公式LINE", funnel: "Instagram → 学割フォーム → ヘッドスパ", tags: ["学割"], messageTags: ["学割", "20代", "スパ"], ltv: 28600, lastVisitDate: "2026-05-01", mainStaffId: "stf_suzuki", firstStaffId: "stf_suzuki", lastStaffId: "stf_suzuki", monthlyMember: { active: false }, lineLinked: true, lineName: "yui.n", tickets: [], visitCount: 3 },
+  { id: "cus_saito", storeId: STORE.id, customerNo: 19, name: "斎藤 美月", kana: "サイトウ ミヅキ", phone: "080-8765-4321", gender: "F", birthday: "1991-02-18", firstSource: "Google", registerMedia: "Web予約", funnel: "Google → 初回カラー → リピート", tags: [], messageTags: ["カラー", "30代"], ltv: 64800, lastVisitDate: "2026-05-15", mainStaffId: "stf_sato", firstStaffId: "stf_sato", lastStaffId: "stf_sato", monthlyMember: { active: false }, lineLinked: true, lineName: "mizuki", tickets: [{ id: "tk_sai1", name: "カラー6回券", totalCount: 6, remaining: 0, durationMin: 90, unitPrice: 6000, validUntil: "2026-06-30", menus: "カラー" }], visitCount: 5 },
+  { id: "cus_kato", storeId: STORE.id, customerNo: 22, name: "加藤 結衣", kana: "カトウ ユイ", phone: "080-2222-3333", gender: "F", birthday: "1989-12-01", firstSource: "紹介", registerMedia: "公式LINE", funnel: "紹介 → 初回フェイシャル → 回数券 → 月額会員", tags: ["紹介", "HPB口コミ済"], messageTags: ["肩こり", "紹介", "フェイシャル", "30代"], ltv: 198000, lastVisitDate: "2026-05-18", nextVisitDate: "2026-05-27", nextVisitTime: "14:30", mainStaffId: "stf_suzuki", firstStaffId: "stf_suzuki", lastStaffId: "stf_suzuki", monthlyMember: { active: true, plan: "スタンダード会員 ¥11,000/月" }, lineLinked: true, lineName: "ゆい", tickets: [{ id: "tk_kat1", name: "フェイシャル4回券", totalCount: 4, remaining: 2, durationMin: 60, unitPrice: 9000, validUntil: "2026-09-30", menus: "フェイシャル" }], visitCount: 7 },
+  { id: "cus_watanabe", storeId: STORE.id, customerNo: 27, name: "渡辺 あおい", kana: "ワタナベ アオイ", phone: "080-1234-5678", gender: "F", birthday: "2001-09-30", firstSource: "Instagram", registerMedia: "店頭", funnel: "Instagram → 店頭来店 → フェイシャル", tags: ["敏感肌"], messageTags: ["敏感肌", "20代"], ltv: 18700, lastVisitDate: "2026-05-05", mainStaffId: "stf_tanaka", firstStaffId: "stf_tanaka", lastStaffId: "stf_tanaka", monthlyMember: { active: false }, lineLinked: false, tickets: [], visitCount: 2 },
+  { id: "cus_ito", storeId: STORE.id, customerNo: 31, name: "伊藤 さくら", kana: "イトウ サクラ", phone: "090-5555-6666", gender: "F", birthday: "2002-03-25", firstSource: "Meta広告", registerMedia: "公式LINE", funnel: "Meta広告 → 初回カウンセリングフォーム → 初回フェイシャル", tags: ["新規"], messageTags: ["新規", "肩こり", "20代"], ltv: 9900, lastVisitDate: "2026-05-27", mainStaffId: "stf_suzuki", firstStaffId: "stf_suzuki", lastStaffId: "stf_suzuki", monthlyMember: { active: false }, lineLinked: false, tickets: [], visitCount: 1 },
+];
+
+// 顧客番号 U000001 はシステム全体で一意・永続。削除不可（売上/予約/カルテと
+// 永続的に紐付くため、退会も論理削除のみ）。表示は6桁ゼロ埋め。
+export function formatCustomerNo(no: number): string {
+  return `U${String(no).padStart(6, "0")}`;
+}
+
+// 電話番号で既存顧客を検索 (新規予約時の重複チェック)
+export function customersByPhone(phone: string): Customer[] {
+  const norm = phone.replace(/[^0-9]/g, "");
+  if (norm.length < 6) return [];
+  return CUSTOMERS.filter((c) => c.phone.replace(/[^0-9]/g, "") === norm);
+}
+
+// 電話予約などで新規顧客を作成 (モック: 共有配列へ追加)。
+// id を明示的に渡せば DB 側と同じ id を使う（POST /api/customers との整合）。
+export function createCustomer(p: { id?: string; name: string; kana?: string; phone: string; firstSource?: string; staffId: string; dateKey: string }): Customer {
+  const no = Math.max(0, ...CUSTOMERS.map((c) => c.customerNo)) + 1;
+  const src = p.firstSource || "電話";
+  const c: Customer = {
+    id: p.id ?? `cus${Date.now()}`,
+    storeId: STORE.id,
+    customerNo: no,
+    name: p.name,
+    kana: p.kana || "",
+    phone: p.phone,
+    gender: "F",
+    firstSource: src,
+    registerMedia: "電話予約",
+    funnel: `${src} → 電話予約`,
+    tags: ["新規"],
+    messageTags: [],
+    ltv: 0,
+    lastVisitDate: p.dateKey,
+    mainStaffId: p.staffId,
+    firstStaffId: p.staffId,
+    lastStaffId: p.staffId,
+    monthlyMember: { active: false },
+    lineLinked: false,
+    tickets: [],
+    visitCount: 0,
+  };
+  CUSTOMERS.push(c);
+  return c;
+}
+
+export function dateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+}
+
+// 「今日」基準でシード予約を生成 (起動時にその日のデータが見える)
+function buildSeed(): Reservation[] {
+  const today = dateKey(new Date());
+  const R = (o: Partial<Reservation> & Pick<Reservation, "id" | "staffId" | "start" | "end">): Reservation => ({
+    storeId: STORE.id,
+    dateKey: today,
+    kind: "RESERVATION",
+    menuIds: [],
+    intervalMin: 0,
+    status: "CONFIRMED",
+    source: "MANUAL",
+    isNominated: false,
+    paid: false,
+    hasChart: false,
+    ...o,
+  });
+  return [
+    R({ id: "r1", customerId: "cus_yamada", staffId: "stf_tanaka", menuIds: ["menu_cut", "menu_color"], start: 10 * 60, end: 10 * 60 + 165, intervalMin: 15, status: "ARRIVED", source: "LINE", isNominated: true, assignments: [
+      { staffId: "stf_tanaka", role: "MAIN", label: "カット", start: 10 * 60, end: 11 * 60, share: 0.4 },
+      { staffId: "stf_suzuki", role: "SUB", label: "カラー", start: 11 * 60, end: 12 * 60 + 30, share: 0.6 },
+      { staffId: "stf_takahashi", role: "ASSIST", label: "カラー補助", start: 11 * 60 + 30, end: 12 * 60 + 45 },
+    ] }),
+    R({ id: "r2", customerId: "cus_takahashi", staffId: "stf_sato", menuIds: ["menu_cut"], start: 10 * 60 + 30, end: 10 * 60 + 90, source: "PHONE" }),
+    R({ id: "r3", customerId: "cus_ito", staffId: "stf_suzuki", menuIds: ["menu_face"], start: 12 * 60 + 30, end: 13 * 60 + 40, intervalMin: 10, source: "WALK_IN" }),
+    R({ id: "r4", customerId: "cus_nakamura", staffId: "stf_tanaka", menuIds: ["menu_spa"], start: 13 * 60, end: 13 * 60 + 55, intervalMin: 10, status: "DONE", source: "LINE", hasChart: true }),
+    R({ id: "r5", customerId: "cus_kobayashi", staffId: "stf_takahashi", menuIds: ["menu_treat"], start: 11 * 60, end: 11 * 60 + 30, status: "DONE", paid: true, hasChart: true }),
+    R({ id: "r6", customerId: "cus_kato", staffId: "stf_suzuki", menuIds: ["menu_perm"], start: 14 * 60 + 30, end: 16 * 60 + 45, intervalMin: 15, source: "LINE", isNominated: true }),
+    R({ id: "r7", customerId: "cus_saito", staffId: "stf_sato", menuIds: ["menu_color"], start: 15 * 60, end: 16 * 60 + 45, intervalMin: 15, source: "PHONE" }),
+    R({ id: "r8", customerId: "cus_watanabe", staffId: "stf_tanaka", menuIds: ["menu_face"], start: 16 * 60, end: 17 * 60 + 10, intervalMin: 10, source: "WALK_IN" }),
+    // 重複(ダブルブッキング)のサンプル: 鈴木の r3 と時間が重なる
+    R({ id: "r9", customerId: "cus_takahashi", staffId: "stf_suzuki", menuIds: ["menu_cut"], start: 13 * 60, end: 14 * 60, source: "MANUAL" }),
+    // キャンセル履歴のサンプル(当日キャンセル)
+    R({ id: "rc1", customerId: "cus_kobayashi", staffId: "stf_sato", menuIds: ["menu_spa"], start: 13 * 60 + 30, end: 14 * 60 + 15, status: "CANCELED", cancelType: "SAME_DAY", source: "LINE" }),
+    // 予約不可枠(ダークアウト)のサンプル
+    R({ id: "b1", kind: "BREAK", staffId: "stf_sato", start: 12 * 60, end: 13 * 60 }),
+    R({ id: "b2", kind: "MEETING", staffId: "stf_suzuki", start: 18 * 60, end: 18 * 60 + 30 }),
+    R({ id: "b3", kind: "BLOCK", staffId: "stf_takahashi", start: 16 * 60, end: 18 * 60 }),
+  ];
+}
+
+export const SEED_RESERVATIONS: Reservation[] = buildSeed();
+
+export const customerById = (id: string) => CUSTOMERS.find((c) => c.id === id);
+export const staffById = (id: string) => STAFF.find((s) => s.id === id);
+export const menuById = (id: string) => MENUS.find((m) => m.id === id);
+
+// スタッフがそのメニューに対応できるか (menuIds 空 = 全対応)
+export const staffHandlesMenu = (staffId: string, menuId: string): boolean => {
+  const s = staffById(staffId);
+  return !s || s.menuIds.length === 0 || s.menuIds.includes(menuId);
+};
+// 予約のメニューに、担当スタッフが対応不可なものが含まれるか
+export const hasStaffMenuMismatch = (r: Reservation): boolean =>
+  r.kind === "RESERVATION" && r.menuIds.some((id) => !staffHandlesMenu(r.staffId, id));
+
+export function menuNames(ids: string[]): string {
+  return ids.map((id) => menuById(id)?.name ?? "").filter(Boolean).join(" + ");
+}
+
+export function ticketRemainingTotal(c: Customer | undefined): number {
+  if (!c) return 0;
+  return c.tickets.reduce((s, t) => s + t.remaining, 0);
+}
+
+// ログイン中ユーザー(個人メモの所有者判定などに使用)
+export const CURRENT_USER = { id: "user_sasaki", name: "佐々木", role: "MANAGER" as const };
+
+// 新規顧客判定 (来店1回以下 or 新規タグ)。台帳で強調表示する
+export const isNewCustomer = (c: Customer | undefined): boolean =>
+  !!c && (c.visitCount <= 1 || c.tags.includes("新規"));
+
+// 離反リスク判定: 回数券残なし AND 次回予約なし → 要フォロー
+export const isChurnRisk = (c: Customer): boolean =>
+  ticketRemainingTotal(c) === 0 && !c.nextVisitDate;
+
+// 回数券の残数ステータス (視認性のためトーン分け)
+export type TicketTone = "ok" | "warn" | "danger" | "none";
+export function ticketStatus(c: Customer): { total: number; label: string; tone: TicketTone } {
+  if (c.tickets.length === 0) return { total: 0, label: "なし", tone: "none" };
+  const total = ticketRemainingTotal(c);
+  if (total === 0) return { total, label: "残0", tone: "danger" };
+  if (total === 1) return { total, label: "残1", tone: "warn" };
+  return { total, label: `残${total}`, tone: "ok" };
+}
+
+// コース別カラー (先頭メニュー基準)。メニュー未設定は slate
+export const reservationColor = (r: Reservation): MenuColor =>
+  menuById(r.menuIds[0] ?? "")?.color ?? "slate";
+
+// 顧客予約画面(◯×)での枠占有判定。キャンセルは空き枠として再解放する
+export const occupiesSlot = (r: Reservation): boolean => r.status !== "CANCELED";
+
+// 施術本体の終了時刻 (占有終了 - インターバル)
+export const serviceEndOf = (r: Reservation): number => r.end - (r.intervalMin ?? 0);
+
+// 選択メニューからインターバルを推定 (最大値・未設定は店舗既定)
+export function suggestedInterval(menuIds: string[]): number {
+  const vals = menuIds.map((id) => menuById(id)?.intervalMin ?? STORE_SETTINGS.defaultIntervalMin);
+  return vals.length ? Math.max(...vals) : STORE_SETTINGS.defaultIntervalMin;
+}
+
+// 2枠が同一スタッフで時間的に重複しているか (占有時間=インターバル込みで判定)
+export function slotsOverlap(a: Reservation, b: Reservation): boolean {
+  return (
+    a.id !== b.id &&
+    a.staffId === b.staffId &&
+    occupiesSlot(a) &&
+    occupiesSlot(b) &&
+    a.start < b.end &&
+    b.start < a.end
+  );
+}
+
+// target と重複する既存枠を返す (二重予約の警告に使用)。お客様側は重複不可、管理画面は警告付きで許可
+export function findConflicts(target: Reservation, slots: Reservation[]): Reservation[] {
+  return slots.filter((s) => slotsOverlap(target, s));
+}
+
+// 枠のタイトル表示(予約は顧客名、それ以外は種別ラベル/カスタムラベル)
+export function blockTitle(r: Reservation): string {
+  if (r.kind === "RESERVATION") return customerById(r.customerId ?? "")?.name ?? "(顧客未設定)";
+  if (r.kind === "OTHER") return r.label?.trim() || BLOCK_KIND_LABEL.OTHER;
+  return BLOCK_KIND_LABEL[r.kind];
+}

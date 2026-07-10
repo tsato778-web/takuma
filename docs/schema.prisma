@@ -1,0 +1,689 @@
+// ============================================================
+// リピスト DB スキーマ（正本 / source of truth）
+//
+// マルチテナント原則:
+//   全業務テーブルに storeId(NOT NULL / FK / INDEX)。
+//   子行の storeId は親と必ず一致する(不変条件)。
+//   強制は ①アプリ層クエリ注入 ②PostgreSQL RLS(design/rls-policies.md)
+//   ③堅牢化: 子FKを (id, storeId) 複合キー参照にして同一店舗を DB 担保(任意)。
+// ============================================================
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ============================================================
+// Enums
+// ============================================================
+enum Role {
+  OWNER
+  MANAGER
+  THERAPIST
+  RECEPTIONIST
+}
+
+enum ResourceType {
+  SEAT
+  ROOM
+}
+
+enum ReservationStatus {
+  REQUESTED // LINE/Web からの仮予約
+  CONFIRMED // 確定
+  ARRIVED   // 来店(チェックイン)
+  DONE      // 施術完了
+  NO_SHOW   // 無断キャンセル
+  CANCELED  // キャンセル
+}
+
+enum ReservationSource {
+  LINE
+  WEB
+  PHONE
+  WALK_IN
+  MANUAL
+}
+
+enum SaleStatus {
+  OPEN   // 会計中(未会計)
+  CLOSED // 会計確定
+  VOIDED // 取消(赤伝)
+}
+
+enum SaleItemKind {
+  MENU        // 施術メニュー売上
+  PRODUCT     // 物販売上
+  TICKET_SALE // 回数券・プリペイド販売(売上計上)
+  TICKET_USE  // 回数券消化(売上0、消化記録)
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  LINE_PAY
+  TICKET  // 回数券で支払(消化)
+  PREPAID // 前払残高で支払
+  OTHER
+}
+
+enum TicketStatus {
+  ACTIVE
+  USED_UP
+  EXPIRED
+  SUSPENDED
+}
+
+enum CustomerStatus {
+  ACTIVE
+  DORMANT // 失客傾向
+  LOST    // 失客
+  BLOCKED
+}
+
+enum ConsentType {
+  TREATMENT
+  PHOTO
+  PRIVACY
+}
+
+enum MessageChannel {
+  LINE
+  SMS
+}
+
+enum MessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  FAILED
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  DONE
+  PAUSED
+}
+
+enum ReminderTrigger {
+  RESERVATION_CONFIRMED
+  BEFORE_24H
+  SAME_DAY_MORNING
+  AFTER_VISIT
+  FOLLOW_7D
+  DORMANT_30D
+  BIRTHDAY
+}
+
+// ============================================================
+// テナント / 店舗 / ユーザー / 権限
+// ============================================================
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  plan      String   @default("standard")
+  createdAt DateTime @default(now())
+  stores    Store[]
+}
+
+model Store {
+  id            String   @id @default(cuid())
+  tenantId      String
+  name          String
+  address       String?
+  phone         String?
+  timezone      String   @default("Asia/Tokyo")
+  businessHours Json? // 曜日別営業時間
+  taxMode       String   @default("inclusive") // inclusive | exclusive
+  taxRoundMode  String   @default("floor") // floor | round | ceil
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  memberships     StoreMembership[]
+  staff           Staff[]
+  customers       Customer[]
+  menus           Menu[]
+  menuCategories  MenuCategory[]
+  resources       Resource[]
+  reservations    Reservation[]
+  visits          Visit[]
+  sales           Sale[]
+  products        Product[]
+  ticketPlans     TicketPlan[]
+  customerTickets CustomerTicket[]
+  lineAccount     LineAccount?
+  campaigns       Campaign[]
+  messageLogs     MessageLog[]
+  reminderRules   ReminderRule[]
+  kpiDaily        KpiDaily[]
+  auditLogs       AuditLog[]
+
+  @@index([tenantId])
+}
+
+model User {
+  id           String            @id @default(cuid())
+  email        String            @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime          @default(now())
+  memberships  StoreMembership[]
+}
+
+// ユーザー × 店舗 × ロール(多対多)
+model StoreMembership {
+  id        String   @id @default(cuid())
+  userId    String
+  storeId   String
+  role      Role
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id])
+  store Store @relation(fields: [storeId], references: [id])
+
+  @@unique([userId, storeId])
+  @@index([storeId])
+}
+
+// 予約割当・指名対象となる店舗ローカルなスタッフ表現
+model Staff {
+  id        String    @id @default(cuid())
+  storeId   String
+  userId    String? // ログインアカウントと紐付く場合
+  name      String
+  role      Role      @default(THERAPIST)
+  color     String? // 予約台帳の色
+  isActive  Boolean   @default(true)
+  hiredAt   DateTime?
+  createdAt DateTime  @default(now())
+
+  store        Store           @relation(fields: [storeId], references: [id])
+  reservations Reservation[]
+  visits       Visit[]
+  records      MedicalRecord[]
+  saleItems    SaleItem[]
+
+  @@index([storeId])
+}
+
+// ============================================================
+// 顧客 / カルテ / 同意
+// ============================================================
+model Customer {
+  id           String         @id @default(cuid())
+  storeId      String
+  name         String
+  kana         String?
+  phone        String?
+  email        String?
+  birthday     DateTime?
+  gender       String?
+  status       CustomerStatus @default(ACTIVE)
+  tags         String[] // タグ表示用
+  note         String?
+  firstVisitAt DateTime?
+  lastVisitAt  DateTime?
+  visitCount   Int            @default(0) // 再来判定の高速化キャッシュ
+  createdAt    DateTime       @default(now())
+
+  store           Store            @relation(fields: [storeId], references: [id])
+  reservations    Reservation[]
+  visits          Visit[]
+  sales           Sale[]
+  medicalRecords  MedicalRecord[]
+  consents        Consent[]
+  customerTickets CustomerTicket[]
+  prepaidBalance  PrepaidBalance?
+  lineLink        LineLink?
+  messageLogs     MessageLog[]
+
+  @@index([storeId])
+  @@index([storeId, phone])
+  @@index([storeId, lastVisitAt])
+  @@index([storeId, status])
+}
+
+model MedicalRecord {
+  id           String   @id @default(cuid())
+  storeId      String
+  customerId   String
+  visitId      String? // 来店に紐付く(任意)
+  staffId      String?
+  body         String // 施術内容
+  skinMemo     String? // 肌/体質メモ
+  nextProposal String? // 次回提案(再来導線)
+  createdAt    DateTime @default(now())
+
+  store    Store         @relation(fields: [storeId], references: [id])
+  customer Customer      @relation(fields: [customerId], references: [id])
+  visit    Visit?        @relation(fields: [visitId], references: [id])
+  staff    Staff?        @relation(fields: [staffId], references: [id])
+  photos   RecordPhoto[]
+
+  @@index([storeId, customerId])
+  @@index([visitId])
+}
+
+model RecordPhoto {
+  id       String   @id @default(cuid())
+  storeId  String
+  recordId String
+  url      String
+  kind     String? // before | after
+  takenAt  DateTime @default(now())
+
+  record MedicalRecord @relation(fields: [recordId], references: [id])
+
+  @@index([storeId, recordId])
+}
+
+model Consent {
+  id         String      @id @default(cuid())
+  storeId    String
+  customerId String
+  type       ConsentType
+  url        String? // 署名済PDF等
+  signedAt   DateTime?
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([storeId, customerId])
+}
+
+// ============================================================
+// メニュー / リソース / 予約 / 来店
+// ============================================================
+model MenuCategory {
+  id      String @id @default(cuid())
+  storeId String
+  name    String
+  sort    Int    @default(0)
+
+  store Store  @relation(fields: [storeId], references: [id])
+  menus Menu[]
+
+  @@index([storeId])
+}
+
+model Menu {
+  id          String  @id @default(cuid())
+  storeId     String
+  categoryId  String?
+  name        String
+  price       Int // 税抜/税込は Store.taxMode
+  taxRate     Int     @default(10) // % (将来の軽減税率対応)
+  durationMin Int // 所要時間(枠計算)
+  isActive    Boolean @default(true)
+
+  store            Store             @relation(fields: [storeId], references: [id])
+  category         MenuCategory?     @relation(fields: [categoryId], references: [id])
+  reservationItems ReservationItem[]
+  ticketPlans      TicketPlan[]
+
+  @@index([storeId])
+}
+
+model Resource {
+  id       String       @id @default(cuid())
+  storeId  String
+  type     ResourceType
+  name     String
+  isActive Boolean      @default(true)
+
+  store        Store         @relation(fields: [storeId], references: [id])
+  reservations Reservation[]
+
+  @@index([storeId])
+}
+
+model Reservation {
+  id          String            @id @default(cuid())
+  storeId     String
+  customerId  String
+  staffId     String? // 指名スタッフ
+  resourceId  String? // 席/個室
+  startAt     DateTime
+  endAt       DateTime
+  status      ReservationStatus @default(CONFIRMED)
+  source      ReservationSource @default(MANUAL)
+  isNominated Boolean           @default(false) // 指名フラグ
+  note        String?
+  createdBy   String?
+  createdAt   DateTime          @default(now())
+
+  store    Store             @relation(fields: [storeId], references: [id])
+  customer Customer          @relation(fields: [customerId], references: [id])
+  staff    Staff?            @relation(fields: [staffId], references: [id])
+  resource Resource?         @relation(fields: [resourceId], references: [id])
+  items    ReservationItem[]
+  visit    Visit?
+
+  // 台帳の日付レンジ取得用。詳細は design/availability-search.md
+  @@index([storeId, startAt])
+  @@index([storeId, staffId, startAt])
+  @@index([storeId, resourceId, startAt])
+  @@index([customerId])
+}
+
+model ReservationItem {
+  id            String @id @default(cuid())
+  storeId       String
+  reservationId String
+  menuId        String
+  price         Int // 予約時点の価格スナップショット
+  durationMin   Int
+
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+  menu        Menu        @relation(fields: [menuId], references: [id])
+
+  @@index([storeId, reservationId])
+}
+
+// 実来店(チェックイン〜チェックアウト)
+model Visit {
+  id            String    @id @default(cuid())
+  storeId       String
+  customerId    String
+  reservationId String?   @unique // 予約経由なら1:1、飛び込みはnull
+  staffId       String?
+  checkedInAt   DateTime  @default(now())
+  checkedOutAt  DateTime?
+
+  store          Store           @relation(fields: [storeId], references: [id])
+  customer       Customer        @relation(fields: [customerId], references: [id])
+  reservation    Reservation?    @relation(fields: [reservationId], references: [id])
+  staff          Staff?          @relation(fields: [staffId], references: [id])
+  sale           Sale?
+  medicalRecords MedicalRecord[]
+  ticketUsages   TicketUsage[]
+
+  @@index([storeId, customerId])
+  @@index([storeId, checkedInAt])
+}
+
+// ============================================================
+// 会計
+// ============================================================
+model Sale {
+  id           String     @id @default(cuid())
+  storeId      String
+  visitId      String?    @unique // 1 Visit = 1 Sale
+  customerId   String
+  subtotal     Int        @default(0) // Σ SaleItem.amount (税抜換算 or 税込、taxMode依存)
+  discount     Int        @default(0)
+  tax          Int        @default(0)
+  total        Int        @default(0) // 請求総額
+  status       SaleStatus @default(OPEN)
+  closedAt     DateTime?
+  voidedAt     DateTime?
+  voidOfSaleId String? // 赤伝の場合、打ち消し対象の元伝票
+  createdAt    DateTime   @default(now())
+
+  store      Store      @relation(fields: [storeId], references: [id])
+  visit      Visit?     @relation(fields: [visitId], references: [id])
+  customer   Customer   @relation(fields: [customerId], references: [id])
+  items      SaleItem[]
+  payments   Payment[]
+  voidOf     Sale?      @relation("SaleVoid", fields: [voidOfSaleId], references: [id])
+  voidedBy   Sale[]     @relation("SaleVoid")
+
+  @@index([storeId, status]) // 未会計一覧(status=OPEN)
+  @@index([storeId, closedAt]) // 日次集計
+  @@index([customerId])
+}
+
+model SaleItem {
+  id        String       @id @default(cuid())
+  storeId   String
+  saleId    String
+  kind      SaleItemKind
+  refId     String? // menuId / productId / customerTicketId
+  name      String // 表示名スナップショット
+  unitPrice Int // TICKET_USE は 0
+  qty       Int          @default(1)
+  amount    Int // unitPrice * qty (TICKET_USE は 0)
+  taxRate   Int          @default(10) // 明細別税率(税率バケット集計用)
+  staffId   String? // 担当(スタッフ別売上)
+
+  sale  Sale   @relation(fields: [saleId], references: [id])
+  staff Staff? @relation(fields: [staffId], references: [id])
+
+  @@index([storeId, saleId])
+  @@index([storeId, kind])
+}
+
+model Payment {
+  id      String        @id @default(cuid())
+  storeId String
+  saleId  String
+  method  PaymentMethod
+  amount  Int
+  paidAt  DateTime      @default(now())
+  ref     String? // Stripe決済ID / 回数券ID 等
+
+  sale Sale @relation(fields: [saleId], references: [id])
+
+  @@index([storeId, saleId])
+  @@index([storeId, method, paidAt])
+}
+
+model Product {
+  id       String  @id @default(cuid())
+  storeId  String
+  name     String
+  price    Int
+  taxRate  Int     @default(10)
+  stock    Int     @default(0)
+  isActive Boolean @default(true)
+
+  store Store @relation(fields: [storeId], references: [id])
+
+  @@index([storeId])
+}
+
+// ============================================================
+// 回数券 / プリペイド
+// ============================================================
+model TicketPlan {
+  id         String  @id @default(cuid())
+  storeId    String
+  name       String
+  menuId     String? // 対象メニュー(null=共通)
+  totalCount Int // 総回数
+  price      Int // 販売価格
+  validDays  Int? // 有効日数(購入日起算)
+  isActive   Boolean @default(true)
+
+  store           Store            @relation(fields: [storeId], references: [id])
+  menu            Menu?            @relation(fields: [menuId], references: [id])
+  customerTickets CustomerTicket[]
+
+  @@index([storeId])
+}
+
+model CustomerTicket {
+  id           String       @id @default(cuid())
+  storeId      String
+  customerId   String
+  ticketPlanId String
+  totalCount   Int // 発行時点の総回数(スナップショット)
+  remaining    Int // 残回数
+  unitValue    Int // 1回あたり按分額 = round(price / totalCount)。消化売上・未消化残高の算出に使用
+  status       TicketStatus @default(ACTIVE)
+  purchasedAt  DateTime     @default(now())
+  expiresAt    DateTime?
+  saleItemId   String? // 購入時の TICKET_SALE 明細
+
+  store      Store         @relation(fields: [storeId], references: [id])
+  customer   Customer      @relation(fields: [customerId], references: [id])
+  ticketPlan TicketPlan    @relation(fields: [ticketPlanId], references: [id])
+  usages     TicketUsage[]
+
+  @@index([storeId, customerId])
+  @@index([storeId, status])
+  @@index([storeId, expiresAt]) // 期限切れバッチ・FIFO消化
+}
+
+model TicketUsage {
+  id               String   @id @default(cuid())
+  storeId          String
+  customerTicketId String
+  visitId          String? // どの来店で消化したか
+  usedCount        Int      @default(1)
+  unitValue        Int      @default(0) // 消化時点の按分額(消化売上集計用スナップショット)
+  voided           Boolean  @default(false) // 赤伝で打ち消された
+  usedAt           DateTime @default(now())
+
+  customerTicket CustomerTicket @relation(fields: [customerTicketId], references: [id])
+  visit          Visit?         @relation(fields: [visitId], references: [id])
+
+  @@index([storeId, customerTicketId])
+  @@index([storeId, usedAt]) // 消化売上の集計
+}
+
+model PrepaidBalance {
+  id         String   @id @default(cuid())
+  storeId    String
+  customerId String   @unique
+  balance    Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([storeId])
+}
+
+// ============================================================
+// LINE / CRM
+// ============================================================
+model LineAccount {
+  id            String  @id @default(cuid())
+  storeId       String  @unique // 店舗ごとに1 LINEチャネル
+  channelId     String
+  channelSecret String
+  channelToken  String
+  liffId        String?
+
+  store Store @relation(fields: [storeId], references: [id])
+}
+
+model LineLink {
+  id         String   @id @default(cuid())
+  storeId    String
+  customerId String   @unique
+  lineUserId String
+  linkedAt   DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@unique([storeId, lineUserId]) // 店舗内で LINE ユーザー一意
+  @@index([storeId])
+}
+
+model MessageTemplate {
+  id          String   @id @default(cuid())
+  storeId     String
+  type        String // reminder | campaign | thanks ...
+  title       String
+  body        String
+  buttonsJson Json?
+  createdAt   DateTime @default(now())
+
+  messageLogs MessageLog[]
+
+  @@index([storeId])
+}
+
+model Campaign {
+  id          String         @id @default(cuid())
+  storeId     String
+  name        String
+  segmentJson Json // 配信対象セグメント条件(design/segment-dsl.md)
+  scheduledAt DateTime?
+  status      CampaignStatus @default(DRAFT)
+  createdAt   DateTime       @default(now())
+
+  store       Store        @relation(fields: [storeId], references: [id])
+  messageLogs MessageLog[]
+
+  @@index([storeId, status])
+}
+
+model ReminderRule {
+  id         String          @id @default(cuid())
+  storeId    String
+  trigger    ReminderTrigger
+  templateId String?
+  isActive   Boolean         @default(true)
+
+  store Store @relation(fields: [storeId], references: [id])
+
+  @@index([storeId])
+}
+
+model MessageLog {
+  id         String         @id @default(cuid())
+  storeId    String
+  customerId String
+  campaignId String?
+  templateId String?
+  channel    MessageChannel @default(LINE)
+  status     MessageStatus  @default(QUEUED)
+  sentAt     DateTime?
+  createdAt  DateTime       @default(now())
+
+  store    Store            @relation(fields: [storeId], references: [id])
+  customer Customer         @relation(fields: [customerId], references: [id])
+  campaign Campaign?        @relation(fields: [campaignId], references: [id])
+  template MessageTemplate? @relation(fields: [templateId], references: [id])
+
+  @@index([storeId, customerId])
+  @@index([storeId, campaignId])
+}
+
+// ============================================================
+// KPI集計 / 監査
+// ============================================================
+model KpiDaily {
+  id               String   @id @default(cuid())
+  storeId          String
+  date             DateTime @db.Date
+  sales            Int      @default(0) // 総売上(財務): メニュー+物販+回数券販売
+  ticketUsedAmount Int      @default(0) // 消化売上(管理指標): 売上には含めない
+  visits           Int      @default(0)
+  newCustomers     Int      @default(0)
+  repeatCustomers  Int      @default(0)
+  repeatRate       Float    @default(0)
+  noShowCount      Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id])
+
+  @@unique([storeId, date])
+  @@index([storeId, date])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  storeId     String
+  actorUserId String?
+  entity      String // "Sale" | "MedicalRecord" | "CustomerTicket" ...
+  entityId    String
+  action      String // create | update | void | delete
+  diffJson    Json?
+  createdAt   DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id])
+
+  @@index([storeId, entity, entityId])
+  @@index([storeId, createdAt])
+}
