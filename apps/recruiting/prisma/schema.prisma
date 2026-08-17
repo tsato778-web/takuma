@@ -1,0 +1,952 @@
+// NAORU 採用LINE・ATSシステム
+// 設計は docs/recruiting-ats/02-data-model.md を参照。
+// Phase 1 で使うテーブルに加え、Phase 2（配信）のテーブルも先に定義している
+// （後からのマイグレーションを避けるため。機能実装は Phase 2）。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // アプリからの接続（Supabase ではコネクションプーラー経由）
+  url       = env("DATABASE_URL")
+  // マイグレーション用の直接接続（プーラー経由では実行できないため）
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================================
+// 共通・認証
+// ============================================================
+
+/// 管理ユーザー。院長・オーナーは canLogin=false で評価者・紹介先としてのみ登録する（A-3）
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  role      String   @default("member") // admin | member
+  kind      String? // headquarters | director | owner
+  canLogin  Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  auditLogs            AuditLog[]
+  ownedCandidates      Candidate[]           @relation("CandidateOwner")
+  interviews           Interview[]
+  evaluations          InterviewEvaluation[]
+  introductionsMade    Introduction[]        @relation("IntroducedBy")
+  introductionsOwned   Introduction[]        @relation("IntroductionOwner")
+  stores               Store[]
+  notes                CandidateNote[]
+  conversations        Conversation[]
+  sentMessages         Message[]
+  importBatches        ImportBatch[]
+  mergeLogs            CandidateMergeLog[]
+  stageChanges         CandidateStageHistory[]
+  assignedTags         CandidateTag[]
+
+  @@index([canLogin, isActive])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  diff       Json?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+}
+
+/// システム設定（年度軸の既定値、LINE設定など）
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+// ============================================================
+// 選考フェーズ
+// ============================================================
+
+model PipelineStage {
+  id         String  @id @default(uuid())
+  code       String  @unique
+  name       String
+  kind       String // prospect | applied | interview | visit | final | offer | joined | closed
+  funnelStep Int?
+  sortOrder  Int
+  isTerminal Boolean @default(false)
+  color      String  @default("#94a3b8")
+  isActive   Boolean @default(true)
+
+  candidates    Candidate[]
+  historiesFrom CandidateStageHistory[] @relation("FromStage")
+  historiesTo   CandidateStageHistory[] @relation("ToStage")
+}
+
+model CandidateStageHistory {
+  id          String   @id @default(uuid())
+  candidateId String
+  fromStageId String?
+  toStageId   String
+  changedBy   String?
+  changedVia  String   @default("manual") // manual | form | system
+  note        String?
+  changedAt   DateTime @default(now())
+
+  candidate Candidate     @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  fromStage PipelineStage? @relation("FromStage", fields: [fromStageId], references: [id])
+  toStage   PipelineStage  @relation("ToStage", fields: [toStageId], references: [id])
+  changedByUser User?      @relation(fields: [changedBy], references: [id])
+
+  @@index([candidateId, changedAt])
+  @@index([toStageId, changedAt])
+}
+
+// ============================================================
+// 候補者・属性
+// ============================================================
+
+model Candidate {
+  id           String  @id @default(uuid())
+  displayName  String?
+  fullName     String?
+  fullNameKana String?
+  birthDate    DateTime? @db.Date
+  age          Int?
+  phone        String?
+  email        String?
+  photoPath    String?
+  nearestStation String?
+
+  employmentCategory String? // new_grad | mid_career
+  licenses           String[]
+  experienceYears    Decimal? @db.Decimal(4, 1)
+
+  currentCompany   String?
+  currentStore     String?
+  changeReason     String?
+  prevSalary       Int?
+  prevWorkingHours String?
+  prevDaysOff      String?
+
+  desiredPrefecture String? // 第1希望の都道府県（A-7）
+  desiredAreaText   String? // 希望エリアの自由記述（A-7）
+  changeTiming      String? // immediately | within_3m | within_6m | within_1y | undecided
+
+  familyStatus String?
+  questions    String?
+  instagram    String?
+  xAccount     String?
+
+  source       String? // instagram | youtube | job_media | agent | school | existing_line | referral | other
+  sourceDetail String?
+  /// 登録経路（A-8）: line | manual | import
+  registrationSource String @default("line")
+  /// 媒体側の応募ID等（A-9 の重複取込防止に使用）
+  externalRef  String?
+
+  stageId        String
+  stageChangedAt DateTime @default(now())
+  status         String   @default("active") // active | hired | declined | rejected
+  ownerUserId    String?
+
+  appliedAt      DateTime?
+  /// 内定年（内定日の暦年）。ダッシュボード年度軸の既定（A-5）
+  offerYear      Int?
+  /// 入社年度（入社日ベース・4月始まり）。年度軸の切替用（A-5）
+  joinFiscalYear Int?
+
+  directorCandidate Boolean @default(false)
+  overallRating     String?
+  lineFriendAt      DateTime?
+  lastContactAt     DateTime?
+  memo              String?
+
+  /// 統合された場合の統合先（A-8）。設定されている候補者は一覧から除外する
+  mergedIntoCandidateId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stage        PipelineStage @relation(fields: [stageId], references: [id])
+  owner        User?         @relation("CandidateOwner", fields: [ownerUserId], references: [id])
+  mergedInto   Candidate?    @relation("CandidateMerge", fields: [mergedIntoCandidateId], references: [id])
+  mergedFrom   Candidate[]   @relation("CandidateMerge")
+
+  lineFriend     LineFriend?
+  desiredAreas   CandidateDesiredArea[]
+  tags           CandidateTag[]
+  notes          CandidateNote[]
+  stageHistories CandidateStageHistory[]
+  interviews     Interview[]
+  interviewPreferences InterviewPreference[]
+  evaluations    InterviewEvaluation[]
+  introductions  Introduction[]
+  offer          Offer?
+  outcome        RecruitmentOutcome?
+  employeeLink   EmployeeLink?
+  submissions    FormSubmission[]
+  formTokens     FormAccessToken[]
+  conversation   Conversation?
+  messages       Message[]
+  messageJobs    MessageJob[]
+  enrollments    ScenarioEnrollment[]
+  broadcastRecipients BroadcastRecipient[]
+  importRows     ImportRow[]
+  mergeLogsAsSource CandidateMergeLog[] @relation("MergeSource")
+  mergeLogsAsTarget CandidateMergeLog[] @relation("MergeTarget")
+
+  @@index([stageId, status])
+  @@index([employmentCategory, offerYear])
+  @@index([joinFiscalYear])
+  @@index([appliedAt])
+  @@index([registrationSource])
+  @@index([fullName])
+  @@index([phone])
+  @@index([email])
+  @@index([nearestStation])
+  @@index([mergedIntoCandidateId])
+}
+
+/// LINE 連携情報（Candidate と 1:1）
+model LineFriend {
+  id              String    @id @default(uuid())
+  candidateId     String    @unique
+  lineUserId      String    @unique
+  displayName     String?
+  pictureUrl      String?
+  statusMessage   String?
+  language        String?
+  followedAt      DateTime  @default(now())
+  unfollowedAt    DateTime?
+  isBlocked       Boolean   @default(false)
+  profileSyncedAt DateTime?
+  richMenuId      String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  richMenu  RichMenu? @relation(fields: [richMenuId], references: [id])
+
+  @@index([isBlocked])
+}
+
+/// 希望エリア（第2希望まで・A-7）
+model CandidateDesiredArea {
+  id          String  @id @default(uuid())
+  candidateId String
+  rank        Int // 1 = 第1希望 / 2 = 第2希望
+  prefecture  String?
+  areaId      String?
+  note        String?
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  area      Area?     @relation(fields: [areaId], references: [id])
+
+  @@unique([candidateId, rank])
+  @@index([prefecture])
+  @@index([areaId])
+}
+
+model Tag {
+  id        String   @id @default(uuid())
+  category  String // license | employment | concern | preference | behavior | source | other
+  name      String
+  color     String   @default("#64748b")
+  isSystem  Boolean  @default(false)
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  candidates CandidateTag[]
+  tagRules   FormFieldTagRule[]
+
+  @@unique([category, name])
+}
+
+model CandidateTag {
+  candidateId String
+  tagId       String
+  assignedBy  String?
+  assignedVia String   @default("manual") // manual | form | scenario | rich_menu | system
+  assignedAt  DateTime @default(now())
+
+  candidate      Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  tag            Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  assignedByUser User?     @relation(fields: [assignedBy], references: [id])
+
+  @@id([candidateId, tagId])
+  @@index([tagId])
+}
+
+model CandidateNote {
+  id          String   @id @default(uuid())
+  candidateId String
+  userId      String?
+  body        String
+  pinned      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id])
+
+  @@index([candidateId, createdAt])
+}
+
+/// 候補者の統合履歴（A-8）。snapshot により統合の取り消しが可能
+model CandidateMergeLog {
+  id                String   @id @default(uuid())
+  sourceCandidateId String
+  targetCandidateId String
+  mergedBy          String?
+  mergedAt          DateTime @default(now())
+  movedSummary      Json?
+  snapshot          Json?
+
+  source     Candidate @relation("MergeSource", fields: [sourceCandidateId], references: [id])
+  target     Candidate @relation("MergeTarget", fields: [targetCandidateId], references: [id])
+  mergedUser User?     @relation(fields: [mergedBy], references: [id])
+
+  @@index([targetCandidateId])
+}
+
+// ============================================================
+// 面談・評価
+// ============================================================
+
+model Interview {
+  id                String    @id @default(uuid())
+  candidateId       String
+  kind              String // first | store_visit | final
+  status            String    @default("scheduled") // scheduled | done | canceled | no_show
+  scheduledAt       DateTime?
+  durationMin       Int?
+  interviewerUserId String?
+  interviewerName   String?
+  storeId           String?
+  location          String?
+  zoomRecordingUrl  String?
+  zoomPasscode      String?
+  zoomMeetingId     String?
+  result            String? // pass | fail | hold
+  note              String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  interviewer User?     @relation(fields: [interviewerUserId], references: [id])
+  store       Store?    @relation(fields: [storeId], references: [id])
+
+  evaluations InterviewEvaluation[]
+
+  @@index([candidateId, kind])
+  @@index([status, scheduledAt])
+}
+
+/// Zoom一次面談の希望日時（第3希望まで・要件5）
+model InterviewPreference {
+  id               String   @id @default(uuid())
+  candidateId      String
+  rank             Int // 1..3
+  desiredAt        DateTime
+  formSubmissionId String?
+  createdAt        DateTime @default(now())
+
+  candidate  Candidate       @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  submission FormSubmission? @relation(fields: [formSubmissionId], references: [id])
+
+  @@index([candidateId, rank])
+}
+
+model InterviewEvaluation {
+  id                 String   @id @default(uuid())
+  interviewId        String
+  candidateId        String
+  evaluatorUserId    String?
+  scorePersonality   Int
+  scoreCommunication Int
+  scoreExperience    Int
+  scoreSkill         Int
+  scoreMotivation    Int
+  scoreRetention     Int
+  scoreCultureFit    Int
+  overall            String // A | B | C
+  goodPoints         String?
+  concerns           String?
+  handoverNote       String?
+  directorPotential  String? // yes | maybe | no
+  memo               String?
+  evaluatedAt        DateTime @default(now())
+
+  interview Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  evaluator User?     @relation(fields: [evaluatorUserId], references: [id])
+
+  @@index([candidateId])
+  @@index([overall])
+}
+
+// ============================================================
+// エリア・店舗・紹介
+// ============================================================
+
+model Area {
+  id         String  @id @default(uuid())
+  name       String
+  prefecture String
+  sortOrder  Int     @default(0)
+  isActive   Boolean @default(true)
+  createdAt  DateTime @default(now())
+
+  stores       Store[]
+  desiredAreas CandidateDesiredArea[]
+  introductions Introduction[]
+  offers       Offer[]
+
+  @@unique([prefecture, name])
+}
+
+model Store {
+  id           String  @id @default(uuid())
+  name         String
+  areaId       String
+  ownerUserId  String?
+  ownerName    String?
+  directorName String?
+  address      String?
+  isActive     Boolean @default(true)
+  createdAt    DateTime @default(now())
+
+  area          Area           @relation(fields: [areaId], references: [id])
+  owner         User?          @relation(fields: [ownerUserId], references: [id])
+  introductions Introduction[]
+  interviews    Interview[]
+  offers        Offer[]
+
+  @@index([areaId])
+}
+
+/// 紹介履歴（要件16）。response='passed'（店舗の見送り）は候補者の不採用とは区別する
+model Introduction {
+  id           String    @id @default(uuid())
+  candidateId  String
+  storeId      String?
+  areaId       String?
+  ownerUserId  String?
+  ownerName    String?
+  sequence     Int       @default(1)
+  introducedAt DateTime  @default(now())
+  introducedBy String?
+  response     String? // want_to_hire | interview_requested | passed | pending
+  respondedAt  DateTime?
+  comment      String?
+  createdAt    DateTime  @default(now())
+
+  candidate     Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  store         Store?    @relation(fields: [storeId], references: [id])
+  area          Area?     @relation(fields: [areaId], references: [id])
+  owner         User?     @relation("IntroductionOwner", fields: [ownerUserId], references: [id])
+  introducedByUser User?  @relation("IntroducedBy", fields: [introducedBy], references: [id])
+
+  @@index([candidateId, sequence])
+  @@index([response])
+}
+
+// ============================================================
+// 内定・入社・採用結果
+// ============================================================
+
+model Offer {
+  id                   String    @id @default(uuid())
+  candidateId          String    @unique
+  salary               Int?
+  salaryNote           String?
+  employmentType       String? // full_time | contract | part_time
+  storeId              String?
+  areaId               String?
+  offeredAt            DateTime?
+  acceptedAt           DateTime?
+  joinDate             DateTime? @db.Date
+  joinedAt             DateTime?
+  tokyoSeminarAttended Boolean?
+  tokyoSeminarDate     DateTime? @db.Date
+  status               String    @default("offered") // offered | accepted | joining_scheduled | joined | withdrawn
+  note                 String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  store     Store?    @relation(fields: [storeId], references: [id])
+  area      Area?     @relation(fields: [areaId], references: [id])
+
+  @@index([joinDate])
+  @@index([status])
+}
+
+model RecruitmentOutcome {
+  id           String   @id @default(uuid())
+  candidateId  String   @unique
+  result       String // hired | declined | rejected
+  reasonCode   String?
+  reasonDetail String?
+  decidedAt    DateTime @default(now())
+  decidedBy    String?
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([result, decidedAt])
+}
+
+/// 入社後分析の接続点（要件24）。Phase 3 で外部の従業員データと突合する
+model EmployeeLink {
+  id           String    @id @default(uuid())
+  candidateId  String    @unique
+  employeeCode String
+  sourceSystem String?
+  joinedOn     DateTime? @db.Date
+  leftOn       DateTime? @db.Date
+  linkedAt     DateTime  @default(now())
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// フォーム
+// ============================================================
+
+model Form {
+  id          String  @id @default(uuid())
+  code        String  @unique // initial_survey | application
+  name        String
+  description String?
+  type        String // survey | application
+  isActive    Boolean @default(true)
+  /// 送信後アクション（フェーズ変更先・付与タグ・送信テンプレート等／要件6）
+  settings    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  fields      FormField[]
+  submissions FormSubmission[]
+  tokens      FormAccessToken[]
+}
+
+model FormField {
+  id        String  @id @default(uuid())
+  formId    String
+  key       String
+  label     String
+  fieldType String // text | textarea | number | select | multiselect | radio | date | datetime | image | station
+  options   Json?
+  required  Boolean @default(false)
+  sortOrder Int     @default(0)
+  /// Candidate の列名。設定されていれば回答を候補者レコードへ自動反映
+  mapsTo    String?
+  helpText  String?
+
+  form     Form               @relation(fields: [formId], references: [id], onDelete: Cascade)
+  tagRules FormFieldTagRule[]
+
+  @@unique([formId, key])
+}
+
+/// 回答に応じた自動タグ付与（要件9）
+model FormFieldTagRule {
+  id          String @id @default(uuid())
+  formFieldId String
+  matchValue  String
+  tagId       String
+
+  formField FormField @relation(fields: [formFieldId], references: [id], onDelete: Cascade)
+  tag       Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([formFieldId, matchValue, tagId])
+}
+
+model FormSubmission {
+  id             String   @id @default(uuid())
+  formId         String
+  candidateId    String
+  payload        Json
+  submittedAt    DateTime @default(now())
+  ip             String?
+  userAgent      String?
+  /// 実行済みの後処理（再実行防止／要件6）
+  appliedActions Json?
+
+  form      Form      @relation(fields: [formId], references: [id])
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  interviewPreferences InterviewPreference[]
+
+  @@index([candidateId, submittedAt])
+  @@index([formId, submittedAt])
+}
+
+/// LIFF を使わない導線用のパーソナライズURLトークン
+model FormAccessToken {
+  id          String    @id @default(uuid())
+  formId      String
+  candidateId String
+  token       String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  form      Form      @relation(fields: [formId], references: [id], onDelete: Cascade)
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// LINE メッセージング
+// ============================================================
+
+/// Webhook の生ログ。lineEventId のユニーク制約で再送・重複を吸収する
+model WebhookEvent {
+  id             String    @id @default(uuid())
+  lineEventId    String?   @unique
+  type           String
+  lineUserId     String?
+  payload        Json
+  signatureValid Boolean   @default(true)
+  receivedAt     DateTime  @default(now())
+  processedAt    DateTime?
+  processError   String?
+
+  messages Message[]
+
+  @@index([receivedAt])
+  @@index([processedAt])
+  @@index([lineUserId])
+}
+
+model Conversation {
+  id              String    @id @default(uuid())
+  candidateId     String    @unique
+  lastMessageAt   DateTime?
+  lastInboundAt   DateTime?
+  unreadCount     Int       @default(0)
+  handlingStatus  String    @default("unhandled") // unhandled | in_progress | done
+  assigneeUserId  String?
+  pinned          Boolean   @default(false)
+  updatedAt       DateTime  @updatedAt
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  assignee  User?     @relation(fields: [assigneeUserId], references: [id])
+
+  @@index([handlingStatus, lastMessageAt])
+}
+
+model Message {
+  id             String   @id @default(uuid())
+  candidateId    String
+  direction      String // inbound | outbound
+  messageType    String // text | image | video | audio | file | sticker | location | flex | template
+  text           String?
+  mediaPath      String?
+  lineMessageId  String?  @unique
+  templateId     String?
+  sentByUserId   String?
+  sendChannel    String? // reply | push | multicast | narrowcast
+  sourceKind     String? // manual | scenario | broadcast | form | rich_menu | auto
+  sourceId       String?
+  status         String   @default("sent") // queued | sent | failed
+  error          String?
+  webhookEventId String?
+  messageJobId   String?
+  sentAt         DateTime @default(now())
+
+  candidate    Candidate     @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  template     Template?     @relation(fields: [templateId], references: [id])
+  sentByUser   User?         @relation(fields: [sentByUserId], references: [id])
+  webhookEvent WebhookEvent? @relation(fields: [webhookEventId], references: [id])
+  job          MessageJob?   @relation(fields: [messageJobId], references: [id])
+
+  deliveries ScenarioDelivery[]
+  broadcastRecipients BroadcastRecipient[]
+
+  @@index([candidateId, sentAt])
+  @@index([direction, sentAt])
+}
+
+/// 送信キュー。すべての LINE 送信をここに集約し、レート制御・リトライ・重複防止を一元化する
+model MessageJob {
+  id             String    @id @default(uuid())
+  kind           String // push | multicast | scenario_step | broadcast_chunk | process_webhook
+  payload        Json
+  candidateId    String?
+  runAt          DateTime  @default(now())
+  status         String    @default("pending") // pending | processing | done | failed | canceled
+  attempts       Int       @default(0)
+  lastError      String?
+  lockedAt       DateTime?
+  lockedBy       String?
+  idempotencyKey String?   @unique
+  priority       Int       @default(100)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  candidate Candidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  messages  Message[]
+
+  @@index([status, runAt, priority])
+}
+
+// ============================================================
+// テンプレート・メディア・リッチメニュー
+// ============================================================
+
+model Template {
+  id          String   @id @default(uuid())
+  name        String
+  category    String   @default("other") // greeting | application | interview | visit | final | offer | appeal | other
+  description String?
+  isActive    Boolean  @default(true)
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  blocks        TemplateBlock[]
+  messages      Message[]
+  scenarioSteps ScenarioStep[]
+  broadcasts    Broadcast[]
+  forms         FormSuccessTemplate[]
+
+  @@index([category, isActive])
+}
+
+/// テンプレートの吹き出し（LINE の1リクエスト上限に合わせ最大5件）
+model TemplateBlock {
+  id           String @id @default(uuid())
+  templateId   String
+  sortOrder    Int
+  blockType    String // text | image | video | flex | buttons | uri
+  content      Json
+  mediaAssetId String?
+
+  template   Template    @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  mediaAsset MediaAsset? @relation(fields: [mediaAssetId], references: [id])
+
+  @@unique([templateId, sortOrder])
+}
+
+/// Form.settings から参照される送信完了テンプレートの中間テーブル
+model FormSuccessTemplate {
+  formCode   String
+  templateId String
+
+  template Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@id([formCode, templateId])
+}
+
+model MediaAsset {
+  id          String   @id @default(uuid())
+  name        String
+  type        String // image | video | file
+  storagePath String
+  /// LINE 配信に使うものだけ公開バケットの URL を持つ（顔写真は非公開のまま）
+  publicUrl   String?
+  mimeType    String?
+  sizeBytes   Int?
+  width       Int?
+  height      Int?
+  durationMs  Int?
+  previewPath String?
+  uploadedBy  String?
+  createdAt   DateTime @default(now())
+
+  templateBlocks TemplateBlock[]
+  richMenus      RichMenu[]
+
+  @@index([type])
+}
+
+model RichMenu {
+  id             String    @id @default(uuid())
+  name           String
+  imageAssetId   String?
+  size           String    @default("full") // full | half
+  chatBarText    String    @default("メニュー")
+  lineRichMenuId String?
+  isDefault      Boolean   @default(false)
+  status         String    @default("draft") // draft | published
+  publishedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  imageAsset MediaAsset?    @relation(fields: [imageAssetId], references: [id])
+  areas      RichMenuArea[]
+  friends    LineFriend[]
+}
+
+model RichMenuArea {
+  id           String @id @default(uuid())
+  richMenuId   String
+  x            Int
+  y            Int
+  width        Int
+  height       Int
+  label        String?
+  actionType   String // send_template | open_uri | open_form | open_survey | add_tag | start_scenario | switch_rich_menu
+  actionPayload Json
+
+  richMenu RichMenu @relation(fields: [richMenuId], references: [id], onDelete: Cascade)
+
+  @@index([richMenuId])
+}
+
+// ============================================================
+// CSV インポート（A-9）
+// ============================================================
+
+model ImportBatch {
+  id          String   @id @default(uuid())
+  fileName    String
+  importedBy  String?
+  totalRows   Int      @default(0)
+  successRows Int      @default(0)
+  errorRows   Int      @default(0)
+  status      String   @default("validating") // validating | done | failed
+  importedAt  DateTime @default(now())
+
+  user User?       @relation(fields: [importedBy], references: [id])
+  rows ImportRow[]
+}
+
+model ImportRow {
+  id           String  @id @default(uuid())
+  batchId      String
+  rowNo        Int
+  raw          Json
+  candidateId  String?
+  status       String // created | updated | skipped | error
+  errorMessage String?
+
+  batch     ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  candidate Candidate?  @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+
+  @@index([batchId, rowNo])
+}
+
+// ============================================================
+// 配信（Phase 2 で機能実装。テーブルのみ先行定義）
+// ============================================================
+
+model Scenario {
+  id             String   @id @default(uuid())
+  name           String
+  description    String?
+  status         String   @default("draft") // draft | active | paused
+  startConditions Json?
+  stopConditions Json?
+  priority       Int      @default(100)
+  maxPerDay      Int      @default(1)
+  sendWindowStart String? // "09:00"
+  sendWindowEnd   String? // "21:00"
+  allowDuplicate Boolean  @default(false)
+  autoEnroll     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  steps       ScenarioStep[]
+  enrollments ScenarioEnrollment[]
+}
+
+model ScenarioStep {
+  id           String    @id @default(uuid())
+  scenarioId   String
+  stepNo       Int
+  templateId   String
+  delayMinutes Int?
+  absoluteAt   DateTime?
+  sendAtTime   String?
+  conditions   Json?
+  isActive     Boolean   @default(true)
+
+  scenario   Scenario           @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  template   Template           @relation(fields: [templateId], references: [id])
+  deliveries ScenarioDelivery[]
+
+  @@unique([scenarioId, stepNo])
+}
+
+model ScenarioEnrollment {
+  id           String    @id @default(uuid())
+  scenarioId   String
+  candidateId  String
+  status       String    @default("active") // active | completed | stopped
+  currentStepNo Int      @default(0)
+  nextSendAt   DateTime?
+  enrolledAt   DateTime  @default(now())
+  enrolledVia  String    @default("auto")
+  stoppedAt    DateTime?
+  stopReason   String?
+
+  scenario   Scenario           @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  candidate  Candidate          @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  deliveries ScenarioDelivery[]
+
+  @@unique([scenarioId, candidateId])
+  @@index([status, nextSendAt])
+}
+
+model ScenarioDelivery {
+  id             String    @id @default(uuid())
+  enrollmentId   String
+  scenarioStepId String
+  candidateId    String
+  status         String    @default("scheduled") // scheduled | sent | skipped | failed
+  scheduledAt    DateTime
+  sentAt         DateTime?
+  skipReason     String? // daily_limit | duplicate | blocked | condition_unmet
+  messageId      String?
+
+  enrollment ScenarioEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  step       ScenarioStep       @relation(fields: [scenarioStepId], references: [id])
+  message    Message?           @relation(fields: [messageId], references: [id])
+
+  @@index([candidateId, scheduledAt])
+}
+
+model Broadcast {
+  id           String    @id @default(uuid())
+  name         String
+  templateId   String
+  targetFilter Json?
+  scheduledAt  DateTime?
+  status       String    @default("draft") // draft | scheduled | sending | sent | canceled
+  totalCount   Int       @default(0)
+  sentCount    Int       @default(0)
+  failedCount  Int       @default(0)
+  createdBy    String?
+  createdAt    DateTime  @default(now())
+
+  template   Template             @relation(fields: [templateId], references: [id])
+  recipients BroadcastRecipient[]
+}
+
+model BroadcastRecipient {
+  id          String  @id @default(uuid())
+  broadcastId String
+  candidateId String
+  status      String  @default("pending") // pending | sent | failed | skipped
+  messageId   String?
+  error       String?
+
+  broadcast Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  message   Message?  @relation(fields: [messageId], references: [id])
+
+  @@unique([broadcastId, candidateId])
+}
