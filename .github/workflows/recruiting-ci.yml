@@ -1,8 +1,10 @@
 name: recruiting CI
 
 on:
+  # main への push と Pull Request のみで実行する
+  # （全ブランチの push でも動かすと、PR 中は同じ検査が二重に走るため）
   push:
-    branches: ["**"]
+    branches: [main]
     paths:
       - "apps/recruiting/**"
       - ".github/workflows/recruiting-ci.yml"
@@ -10,6 +12,10 @@ on:
     paths:
       - "apps/recruiting/**"
       - ".github/workflows/recruiting-ci.yml"
+
+concurrency:
+  group: recruiting-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 defaults:
   run:
