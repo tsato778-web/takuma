@@ -42,12 +42,13 @@ LINE公式アカウントAPI連携 / LINE友だち管理 / アンケート / 応
 | 並行して運用側 | 採用専用 LINE 公式アカウント開設、Messaging API チャネル・LINEログインチャネル作成、シークレット共有 |
 | 完了条件 | 共通の ID とパスワードで本番ドメインにログインでき、空の管理画面レイアウト（左サイドメニュー）が表示される |
 
-### Sprint 1：LINE 連携基盤・友だち管理（1週）
+### Sprint 1：LINE 連携基盤・友だち管理（1週）✅ 完了
 
 | 項目 | 内容 |
 | --- | --- |
-| 実装 | Webhook 受信（署名検証・生ログ保存・即時200）、ジョブ基盤（`message_jobs` ＋ Vercel Cron）、`follow`/`unfollow`/`message` 処理、プロフィール取得、`candidates`＋`line_friends` 作成、受信メディアの Storage 保存、挨拶メッセージ送信 |
+| 実装 | Webhook 受信（署名検証・生ログ保存・重複排除・即時200）、ジョブ基盤（`message_jobs` ＋ Vercel Cron ＋ 指数バックオフ再試行）、`follow`/`unfollow`/`message`/`postback` 処理、プロフィール取得、`candidates`＋`line_friends` 作成、タグ自動付与、フェーズ遷移（履歴つき）、挨拶テンプレート送信、受信メディアの Storage 保存、友だち一覧画面、LINE設定画面（Webhook URL・接続確認・残数・受信ログ） |
 | 完了条件 | テスト用アカウントを友だち追加すると候補者が自動登録され、挨拶が届き、送受信メッセージが履歴に残る。ブロックすると配信対象から外れる |
+| 補足 | LIFF は応募フォーム（Sprint 3）で使用するため、Sprint 1 のブロッカーにはしない。`LINE_DRY_RUN=true` を既定とし、実送信は依頼者の確認後に一時的に解除する運用 |
 
 ### Sprint 2：タグ・候補者一覧・詳細（1週）
 

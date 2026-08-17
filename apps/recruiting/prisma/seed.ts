@@ -3,8 +3,8 @@
  *
  *   npm run db:seed
  *
- * ログインできるユーザーは環境変数 SEED_ADMINS で指定する。
- *   SEED_ADMINS="佐藤拓磨:sato@example.com,若林:wakabayashi@example.com"
+ * ログインは共通の管理者アカウント1つ（環境変数 ADMIN_USER_ID / ADMIN_PASSWORD_HASH）。
+ * ここでは監査ログ用の共通アカウントと、ログインしない担当者を登録する。
  */
 import { PrismaClient } from "@prisma/client";
 
@@ -45,7 +45,7 @@ const TAGS: { category: string; names: string[] }[] = [
   { category: "license", names: ["柔道整復師", "鍼灸師", "理学療法士", "その他資格"] },
   { category: "employment", names: ["新卒", "中途"] },
   { category: "concern", names: ["給料", "労働時間", "休日", "キャリア", "技術", "人間関係", "その他の悩み"] },
-  { category: "behavior", names: ["アンケート済み", "応募済み", "動画視聴対象", "選考中", "内定"] },
+  { category: "behavior", names: ["LINE登録", "アンケート済み", "応募済み", "動画視聴対象", "選考中", "内定"] },
   {
     category: "source",
     names: ["Instagram", "YouTube", "求人媒体", "人材紹介", "学校", "既存LINE", "紹介", "その他流入"],
@@ -291,18 +291,64 @@ async function main() {
   }
   console.log(`自動タグルール: ${ruleCount}件`);
 
+  // --- 初回挨拶テンプレート（要件11・友だち追加時に自動送信）---
+  const greeting = await prisma.template.findFirst({
+    where: { name: "初回挨拶" },
+    select: { id: true },
+  });
+
+  const greetingId =
+    greeting?.id ??
+    (
+      await prisma.template.create({
+        data: {
+          name: "初回挨拶",
+          category: "greeting",
+          description: "友だち追加時に自動送信するメッセージ",
+          blocks: {
+            create: [
+              {
+                sortOrder: 10,
+                blockType: "text",
+                content: {
+                  text: "友だち追加ありがとうございます！\nNAORU 採用担当です。",
+                },
+              },
+              {
+                sortOrder: 20,
+                blockType: "text",
+                content: {
+                  text:
+                    "はじめに、いくつか質問にお答えください（1分ほどで終わります）。\n" +
+                    "お答えいただいた内容に合わせて、お役に立ちそうな情報をお送りします。",
+                },
+              },
+            ],
+          },
+        },
+        select: { id: true },
+      })
+    ).id;
+  console.log("初回挨拶テンプレート: 準備完了");
+
   // --- システム設定 ---
   const settings: { key: string; value: unknown }[] = [
     // A-5：既定は内定日ベース・暦年。画面から入社年度へ切替可能にする
     { key: "dashboard.year_axis", value: "offer_year" },
     { key: "dashboard.fiscal_year_start_month", value: 4 },
     { key: "line.dry_run", value: true },
+    // 友だち追加時に送るテンプレート
+    { key: "line.greeting_template_id", value: greetingId },
   ];
   for (const setting of settings) {
     await prisma.appSetting.upsert({
       where: { key: setting.key },
       create: { key: setting.key, value: setting.value as never },
-      update: {},
+      // 挨拶テンプレートIDは実体に追従させる
+      update:
+        setting.key === "line.greeting_template_id"
+          ? { value: setting.value as never }
+          : {},
     });
   }
   console.log(`システム設定: ${settings.length}件`);

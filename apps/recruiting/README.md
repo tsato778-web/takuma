@@ -6,7 +6,7 @@ LINE 登録から入社までを一元管理する採用管理システム。
 - 技術構成：Next.js 15（App Router）/ TypeScript / PostgreSQL（Supabase）/ Prisma / Auth.js v5（共通管理者アカウント1つ）
 - ホスティング：Vercel（このディレクトリを Root Directory に指定した専用プロジェクト）
 
-現在の進捗：**Sprint 0（基盤構築）完了**。画面は空のレイアウトのみで、業務機能は Sprint 1 以降に実装する。
+現在の進捗：**Sprint 1（LINE連携基盤・友だち管理）完了**。友だち追加から候補者の自動登録・挨拶送信・トーク履歴保存までが動作する。
 
 ---
 
@@ -35,6 +35,10 @@ cp .env.example .env
 | `ADMIN_USER_ID` | ログインID（任意の文字列。例：`naoru-recruit`） |
 | `ADMIN_PASSWORD_HASH` | パスワードのハッシュ（下記で生成） |
 | `SEED_MEMBERS` | ログインしない担当者（面談担当・評価者）の「氏名:区分」をカンマ区切り |
+| `LINE_CHANNEL_SECRET` | LINE Developers Console → Messaging API チャネル |
+| `LINE_CHANNEL_ACCESS_TOKEN` | 同上（発行ボタンで生成） |
+| `LINE_DRY_RUN` | **既定は `true`（実送信しない）**。実送信テスト時のみ一時的に `false` |
+| `CRON_SECRET` | 送信キューの定期実行を保護するトークン（本番必須。任意の長い文字列） |
 
 ### 3. 管理者パスワードの設定
 
@@ -76,8 +80,62 @@ npm run dev     # http://localhost:3000
 | ログイン | `/login` で ID とパスワードを入力 | ダッシュボードが表示される |
 | 誤ったパスワード | わざと違うパスワードを入力 | ログインできず「ID またはパスワードが違います」と表示される |
 | 総当たり対策 | パスワードを8回続けて間違える | 一定時間ログインを受け付けなくなる |
-| ダッシュボード | ログイン後のトップ | 21フェーズのカードが 0 件で表示される |
+| ダッシュボード | ログイン後のトップ | 21フェーズのカードが表示される |
 | サイドメニュー | 左メニューの各項目 | 各画面が開き、未実装画面は実装予定スプリントが表示される |
+| 友だち自動登録 | `npm run line:simulate -- follow` | 友だち情報に1件増え、タグ「LINE登録」・フェーズ「アンケート未回答」・挨拶2通が記録される |
+| トーク履歴 | `npm run line:simulate -- message "テスト"` | 受信メッセージが履歴に残る |
+| ブロック | `npm run line:simulate -- unfollow` | 状態が「ブロック」になり、送信待ちジョブが取り消される |
+| 署名検証 | 署名なしで Webhook に POST | 400 が返る |
+
+---
+
+## LINE 連携（Sprint 1）
+
+### 実送信の扱い
+
+`LINE_DRY_RUN=true`（既定）では **LINE へ実際の送信を行わない**。送信内容はログに出力され、トーク履歴には「DRY_RUN（実送信なし）」付きで記録されるため、動作確認は一通りできる。プロフィール取得などの読み取り API は `true` のままでも実行される。
+
+**実送信テストを行うときだけ、依頼者の確認を取ってから一時的に `false` にする。** テスト終了後は `true` に戻す。
+
+### LINE アカウントなしで動作確認する
+
+シミュレータで Webhook を模擬できる。実際の LINE 公式アカウントが無くても、友だち追加からトーク履歴保存まで検証できる。
+
+```bash
+npm run dev                                  # 別ターミナルで起動しておく
+
+npm run line:simulate -- follow              # 友だち追加
+npm run line:simulate -- message "テスト送信" # メッセージ受信
+npm run line:simulate -- follow --user U_test_002
+npm run line:simulate -- unfollow            # ブロック
+```
+
+結果は管理画面の **友だち情報** と **設定 → LINE公式アカウント設定** で確認できる。
+
+### 実際の LINE 公式アカウントに接続する
+
+1. LINE Developers Console で Messaging API チャネルを作成
+2. `LINE_CHANNEL_SECRET` / `LINE_CHANNEL_ACCESS_TOKEN` を環境変数に設定
+3. 管理画面の **設定 → LINE公式アカウント設定** に表示される Webhook URL を、Console の Webhook URL に登録して「検証」
+4. 同画面の「接続確認」でアカウント名・応答モード・メッセージ残数が表示されれば接続完了
+5. LINE 公式アカウント側で **あいさつメッセージ・応答メッセージをオフ**、**応答モードを Bot**、**Webhook をオン** にする
+
+### 処理の流れ
+
+```
+LINE → /api/line/webhook
+        ├ 署名検証（不一致は 400）
+        ├ WebhookEvent に生ログ保存（webhookEventId で重複排除）
+        ├ MessageJob に登録
+        ├ 短時間だけその場で処理（挨拶を待たせないため）
+        └ 200 を返す
+                     ↓
+        /api/cron/dispatch（毎分・Vercel Cron）が残りを処理
+        └ 失敗時は 1分 → 5分 → 30分 → 2時間 → 6時間 で再試行（最大5回）
+```
+
+> Vercel の毎分 Cron は Pro プラン以上が必要。Hobby プランの場合は Cron が1日1回になるため、
+> Webhook 受信時のインライン処理が主経路になる（挨拶などの即時処理は動作する）。
 
 ---
 
@@ -95,6 +153,7 @@ npm run dev     # http://localhost:3000
 | `npm run db:seed` | 初期データ投入 |
 | `npm run db:studio` | Prisma Studio で DB を閲覧 |
 | `npm run auth:hash -- "パスワード"` | 管理者パスワードのハッシュを生成 |
+| `npm run line:simulate -- follow` | Webhook を模擬して動作確認（LINE アカウント不要） |
 
 ---
 
@@ -109,9 +168,16 @@ apps/recruiting/
 │  ├─ login/            # ログイン画面
 │  └─ api/
 │     ├─ auth/          # Auth.js のエンドポイント
+│     ├─ line/webhook/  # LINE Webhook 受信
+│     ├─ cron/dispatch/ # 送信キューの定期処理
 │     └─ health/        # 死活監視
 ├─ components/          # UI コンポーネント
 ├─ lib/
+│  ├─ line/             # 署名検証・API クライアント・イベント処理・テンプレート描画
+│  ├─ jobs/             # 送信キュー（登録・取り出し・再試行）
+│  ├─ pipeline/         # 選考フェーズ変更（履歴を必ず残す）
+│  ├─ tags.ts           # タグ付与
+│  ├─ storage.ts        # 受信メディアの保存
 │  ├─ db.ts             # Prisma クライアント
 │  ├─ password.ts       # 管理者パスワードの照合・試行制限
 │  ├─ env.ts            # 環境変数の検証
@@ -134,7 +200,9 @@ apps/recruiting/
 
 1. Vercel で New Project → 同じリポジトリを選択
 2. **Root Directory に `apps/recruiting` を指定**
-3. 環境変数（`DATABASE_URL` / `DIRECT_URL` / `AUTH_SECRET` / `ADMIN_USER_ID` / `ADMIN_PASSWORD_HASH`）を登録
-4. Sprint 1 以降は LINE 関連の環境変数を追加する
+3. 環境変数を登録
+   - `DATABASE_URL` / `DIRECT_URL` / `AUTH_SECRET` / `ADMIN_USER_ID` / `ADMIN_PASSWORD_HASH`
+   - `LINE_CHANNEL_SECRET` / `LINE_CHANNEL_ACCESS_TOKEN` / `LINE_DRY_RUN` / `CRON_SECRET`
+4. `vercel.json` の Cron 設定により、送信キューが毎分処理される（Pro プラン以上）
 
 マイグレーションはデプロイとは別に `npm run db:deploy` で適用する（自動実行はしない）。

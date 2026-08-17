@@ -8,10 +8,10 @@ const schema = z.object({
   DATABASE_URL: z.string().url(),
   AUTH_SECRET: z.string().min(16),
   ADMIN_USER_ID: z.string().min(1),
-  // Sprint 1 以降で使用
   LINE_CHANNEL_SECRET: z.string().optional(),
   LINE_CHANNEL_ACCESS_TOKEN: z.string().optional(),
   LINE_DRY_RUN: z.enum(["true", "false"]).optional(),
+  CRON_SECRET: z.string().optional(),
 });
 
 export type Env = z.infer<typeof schema>;

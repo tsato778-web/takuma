@@ -14,7 +14,8 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "auth:hash": "tsx scripts/hash-password.ts"
+    "auth:hash": "tsx scripts/hash-password.ts",
+    "line:simulate": "tsx --env-file-if-exists=.env scripts/simulate-webhook.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
