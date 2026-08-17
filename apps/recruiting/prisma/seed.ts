@@ -132,39 +132,55 @@ async function main() {
   }
   console.log(`タグ: ${tagCount}件`);
 
-  // --- 管理ユーザー ---
-  // SEED_ADMINS="氏名:メール,氏名:メール" 形式。未設定なら既定の1名のみ。
-  const adminsRaw = process.env.SEED_ADMINS ?? "佐藤拓磨:t.sato778@gmail.com";
-  const admins = adminsRaw
+  // --- 共通管理者アカウント ---
+  // ログインは環境変数（ADMIN_USER_ID / ADMIN_PASSWORD_HASH）で行い、
+  // この users レコードは監査ログや担当者の参照先として使う。
+  const sharedEmail = process.env.ADMIN_ACCOUNT_EMAIL ?? "admin@naoru.local";
+  const sharedName = process.env.ADMIN_ACCOUNT_NAME ?? "NAORU採用チーム";
+  await prisma.user.upsert({
+    where: { email: sharedEmail },
+    create: {
+      email: sharedEmail,
+      name: sharedName,
+      role: "admin",
+      kind: "headquarters",
+      canLogin: true,
+      isActive: true,
+    },
+    update: { name: sharedName, role: "admin", canLogin: true, isActive: true },
+  });
+  console.log(`共通管理者アカウント: ${sharedName} <${sharedEmail}>`);
+
+  // --- 面談担当者（ログインしない。評価・紹介の記録用）---
+  // SEED_MEMBERS="氏名:区分" 形式（区分は headquarters | director | owner）
+  const membersRaw = process.env.SEED_MEMBERS ?? "佐藤拓磨:headquarters,若林:headquarters,八尋:headquarters";
+  const members = membersRaw
     .split(",")
     .map((entry) => entry.trim())
     .filter(Boolean)
     .map((entry) => {
-      const [name, email] = entry.split(":").map((v) => v.trim());
-      return { name, email: email?.toLowerCase() };
+      const [name, kind] = entry.split(":").map((v) => v.trim());
+      return { name, kind: kind || "headquarters" };
     })
-    .filter((a): a is { name: string; email: string } => Boolean(a.name && a.email));
+    .filter((m) => Boolean(m.name));
 
-  for (const admin of admins) {
+  for (const member of members) {
+    // ログインしないためメールは内部識別用のみ
+    const email = `${encodeURIComponent(member.name)}@members.naoru.local`;
     await prisma.user.upsert({
-      where: { email: admin.email },
+      where: { email },
       create: {
-        email: admin.email,
-        name: admin.name,
-        role: "admin",
-        kind: "headquarters",
-        canLogin: true,
+        email,
+        name: member.name,
+        role: "member",
+        kind: member.kind,
+        canLogin: false,
         isActive: true,
       },
-      update: { name: admin.name, role: "admin", canLogin: true, isActive: true },
+      update: { name: member.name, kind: member.kind, canLogin: false },
     });
   }
-  console.log(`ログイン可能ユーザー: ${admins.length}名 (${admins.map((a) => a.email).join(", ")})`);
-  if (!process.env.SEED_ADMINS) {
-    console.log(
-      "  ※ 若林さん・八尋さんの Google アカウントは SEED_ADMINS に追加して再実行してください",
-    );
-  }
+  console.log(`担当者（ログインなし）: ${members.map((m) => m.name).join(", ")}`);
 
   // --- フォーム ---
   const survey = await prisma.form.upsert({

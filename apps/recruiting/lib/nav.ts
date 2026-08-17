@@ -63,7 +63,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/settings/line", label: "LINE公式アカウント設定" },
       { href: "/settings/pipeline", label: "採用フロー設定" },
       { href: "/settings/areas", label: "エリア・店舗マスタ" },
-      { href: "/settings/users", label: "ユーザー" },
+      { href: "/settings/users", label: "担当者マスタ" },
       { href: "/settings/import", label: "CSVインポート" },
     ],
   },

@@ -1,10 +1,9 @@
 import type { NextAuthConfig } from "next-auth";
-import Google from "next-auth/providers/google";
 
-/** Prisma に依存しない基本設定（Edge でも読み込める） */
+/** プロバイダ以外の基本設定 */
 export const authConfig = {
-  providers: [Google],
-  session: { strategy: "jwt" },
+  providers: [],
+  session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 7 },
   pages: { signIn: "/login", error: "/login" },
   trustHost: true,
 } satisfies NextAuthConfig;

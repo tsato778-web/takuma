@@ -7,8 +7,7 @@ import { z } from "zod";
 const schema = z.object({
   DATABASE_URL: z.string().url(),
   AUTH_SECRET: z.string().min(16),
-  AUTH_GOOGLE_ID: z.string().min(1),
-  AUTH_GOOGLE_SECRET: z.string().min(1),
+  ADMIN_USER_ID: z.string().min(1),
   // Sprint 1 以降で使用
   LINE_CHANNEL_SECRET: z.string().optional(),
   LINE_CHANNEL_ACCESS_TOKEN: z.string().optional(),
@@ -36,8 +35,8 @@ export function envStatus() {
     database: Boolean(process.env.DATABASE_URL),
     auth: Boolean(
       process.env.AUTH_SECRET &&
-        process.env.AUTH_GOOGLE_ID &&
-        process.env.AUTH_GOOGLE_SECRET,
+        process.env.ADMIN_USER_ID &&
+        (process.env.ADMIN_PASSWORD_HASH || process.env.ADMIN_PASSWORD),
     ),
     line: Boolean(
       process.env.LINE_CHANNEL_SECRET && process.env.LINE_CHANNEL_ACCESS_TOKEN,
