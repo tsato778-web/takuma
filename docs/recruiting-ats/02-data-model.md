@@ -25,6 +25,18 @@ DBMS：PostgreSQL。全テーブルに `id`（UUID v7 相当）、`created_at`�
 
 `candidate_stage_histories` を持つことで、要件20（各ステップの転換率）と要件24（入社後分析）に必要な「いつどのフェーズに到達したか」を後から再計算できる。**現在値だけを持つ設計にすると転換率もリードタイムも出せなくなる**ため、これは Phase 1 で必須とする。
 
+### 判断4：登録経路を分離し、後から LINE と統合できるようにする（2026-08-17 決定 / A-8）
+
+求人媒体・人材紹介・学校経由など **LINE を経由しない応募者も同じ `candidates` に登録**する。LINE 未連携の候補者は `line_friends` を持たない状態で存在し、後日その人が LINE を友だち追加した場合に **2レコードを1人へ統合（マージ）** できるようにする。
+
+- `candidates.registration_source` に `line` / `manual` / `import` を保持し、流入分析で経路を区別する。
+- 友だち追加時に、氏名・電話番号・メールアドレスの一致から**統合候補を自動提示**し、担当者が確認して統合する（自動統合はしない。別人を統合すると復旧が困難なため）。
+- 統合は `line_friends.candidate_id` の付け替えと関連レコードの移送で行い、`candidate_merge_logs` に記録して取り消せるようにする。
+
+### 判断5：年度の集計軸を2種類持つ（2026-08-17 決定 / A-5）
+
+ダッシュボードの年度は **既定を「内定日ベース・暦年（1〜12月）」** とし、**「入社日ベース・年度（4月〜翌3月）」に切り替え可能**にする。単一の `fiscal_year` 列では両立できないため、候補者に2つの年度列を持たせる（`offer_year` / `join_fiscal_year`）。どちらも内定日・入社日から自動計算し、手入力はしない。
+
 ---
 
 ## 2. 全体ER図（ドメイン別）
@@ -102,7 +114,10 @@ erDiagram
 | name | text | 佐藤拓磨 / 若林 / 八尋 など |
 | role | text | `admin` / `member`（初期は2種のみ。要件25） |
 | kind? | text | `headquarters` / `director`（院長）/ `owner`（オーナー）。面談担当者の分類に使用 |
+| can_login | bool | **ログイン可否**。院長・オーナーは面談担当者・紹介先として登録するが `false`（A-3） |
 | is_active | bool | 退職・利用停止時に false |
+
+> **A-3 / A-4 の決定**：ログイン可能なのは佐藤拓磨・若林・八尋の3名（`can_login=true` / `role='admin'`）。院長・オーナーは評価者・紹介先として `users` に登録するがログインはせず、面談評価は本部が代理入力する。`can_login` を分けておくことで、将来 Phase 2 で院長・オーナーのログインを開放する際にデータ移行が不要になる。
 
 #### `audit_logs`（操作ログ）
 | 列 | 型 | 説明 |
@@ -142,27 +157,57 @@ erDiagram
 | prev_salary? | int | 前職給与（円） | 5 |
 | prev_working_hours? | text | 前職勤務時間 | 5 |
 | prev_days_off? | text | 前職休日日数 | 5 |
-| desired_area_id? | uuid FK→areas | 勤務希望エリア | 5, 21 |
-| desired_area_text? | text | マスタ外の自由記述 | |
+| desired_prefecture? | text IX | 希望都道府県（第1希望）。エリアマスタが未整備でも検索できるようにするための基本軸 | 5, 21 |
+| desired_area_text? | text | 希望エリアの自由記述（「23区東部が希望」等の補足） | 5 |
 | change_timing? | text | 転職希望時期（`immediately` / `within_3m` / `within_6m` / `within_1y` / `undecided`） | 5, 21 |
 | family_status? | text | 家庭状況 | 5 |
 | questions? | text | 聞きたいこと | 5 |
-| source? | text IX | 流入経路（Instagram / YouTube / 求人媒体 / 既存LINE / 紹介 / その他） | 8, 21 |
-| source_detail? | text | 紹介者名など | |
+| source? | text IX | 流入経路（Instagram / YouTube / 求人媒体 / 人材紹介 / 学校 / 既存LINE / 紹介 / その他） | 8, 21 |
+| source_detail? | text | 媒体名・紹介者名・学校名など | |
+| registration_source | text IX | **登録経路**：`line`（友だち追加）/ `manual`（手動登録）/ `import`（CSV取込） | A-8 |
+| external_ref? | text | 媒体側の応募ID・管理番号（取込元との突合用） | A-9 |
+| merged_into_candidate_id? | uuid FK→candidates | 統合された場合の統合先。統合元は参照専用として残す | A-8 |
 | instagram?, x_account? | text | SNS アカウント | 5 |
 | stage_id | uuid FK→pipeline_stages IX | **現在の選考フェーズ** | 4 |
 | stage_changed_at | timestamptz | 現フェーズ到達日時（滞留日数の算出用） | 19 |
 | status | text IX | `active` / `hired` / `declined`（辞退）/ `rejected`（不採用）。フェーズとは独立に「生きている候補者か」を判定 | 17 |
 | owner_user_id? | uuid FK→users | 担当者 | |
 | applied_at? | timestamptz IX | 応募確定日時 | 20 |
-| fiscal_year? | int IX | 採用年度（ダッシュボードの年度フィルタ） | 19 |
+| offer_year? | int IX | **内定年**（内定日の暦年 1〜12月）。ダッシュボード年度軸の**既定値**。内定日から自動計算 | 19 |
+| join_fiscal_year? | int IX | **入社年度**（入社日ベース、4月〜翌3月）。年度軸の切替用。入社日から自動計算 | 19 |
 | director_candidate? | bool IX | 院長候補フラグ（面談評価から反映） | 21 |
 | overall_rating? | text IX | 最新の総合評価 A/B/C（検索高速化のための非正規化） | 21 |
 | line_friend_at? | timestamptz IX | LINE 友だち登録日 | 7, 20 |
 | last_contact_at? | timestamptz | 最終接触日時 | |
 | memo? | text | 自由記述 | |
 
-**インデックス**：`(stage_id, status)`、`(employment_category, fiscal_year)`、`(applied_at)`、`licenses` に GIN、氏名・会社名に対する日本語全文検索用インデックス（`pg_bigm` もしくは `LIKE` 用の trigram）。
+**インデックス**：`(stage_id, status)`、`(employment_category, offer_year)`、`(join_fiscal_year)`、`(applied_at)`、`(registration_source)`、`licenses` に GIN、氏名・会社名に対する日本語全文検索用インデックス（`pg_bigm` もしくは `LIKE` 用の trigram）。統合候補の検出用に `phone` / `email` / `full_name` にもインデックスを張る。
+
+#### `candidate_desired_areas`（希望エリア／第2希望まで・A-7）
+| 列 | 型 | 説明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| candidate_id | uuid FK IX | |
+| rank | smallint | 1（第1希望）/ 2（第2希望） |
+| prefecture? | text IX | 都道府県 |
+| area_id? | uuid FK→areas | エリアマスタ（未整備でも NULL のまま運用可能） |
+| note? | text | 自由記述 |
+
+ユニーク `(candidate_id, rank)`。
+
+> **設計方針（A-7）**：エリアマスタを Phase 1 で細かく作り込まず、`都道府県 + エリア（任意）+ 自由記述` の3層で受ける。運用しながら実際に出てきたエリア名を管理画面から追加していけばよく、マスタ未整備でも都道府県で検索・集計できる。候補者一覧の主要フィルタは `desired_prefecture` を使い、エリアマスタが揃った段階で `area_id` による絞り込みを追加する。
+
+#### `candidate_merge_logs`（候補者の統合履歴・A-8）
+`id` / `source_candidate_id`（統合元）/ `target_candidate_id`（統合先）/ `merged_by` FK→users / `merged_at` / `moved_summary` jsonb（移送したメッセージ・フォーム回答・タグ等の件数）/ `snapshot` jsonb（統合前の統合元レコード。取り消し用）。
+
+> 統合は「LINE 未連携で手動登録済みの候補者」と「新たに友だち追加された LINE 友だち」が同一人物だった場合に実行する。トーク履歴・フォーム回答・タグ・面談・評価・紹介履歴をすべて統合先へ移し、統合元は `merged_into_candidate_id` を設定して一覧から除外する（物理削除しない）。
+
+#### `import_batches` / `import_rows`（CSV インポート・A-9）
+`import_batches`：`id` / `file_name` / `imported_by` FK→users / `total_rows` / `success_rows` / `error_rows` / `status`（`validating` / `done` / `failed`）/ `imported_at`。
+
+`import_rows`：`batch_id` FK / `row_no` / `raw` jsonb / `candidate_id?` / `status`（`created` / `updated` / `skipped` / `error`）/ `error_message?`。
+
+> Phase 1 では「選考中の候補者のみ移行」（A-9）のため件数は小さいが、**将来の追加取り込みに備えて取込履歴を残す構造**にする。`external_ref` による重複チェックで、同じ人を二重登録しない。
 
 #### `line_friends`（LINE 連携情報。candidates と 1:1）
 | 列 | 型 | 説明 |
@@ -264,8 +309,10 @@ erDiagram
 
 ### 3-5. 店舗・エリアマッチング
 
-#### `areas`（エリア／要件16）
-`id` / `name`（例：東京・神奈川・大阪…）/ `prefecture?` / `sort_order` / `is_active`。
+#### `areas`（エリア／要件16・A-7）
+`id` / `name`（例：東京東部・横浜・大阪北部…）/ `prefecture` / `sort_order` / `is_active` / `created_by`。
+
+> **管理画面から追加・編集・無効化できる**ようにし、Phase 1 の初期投入は「現在採用対象の都道府県」＋「既に紹介実績のあるエリア」の最小構成に留める（A-7 の決定）。既に候補者に紐づいたエリアは物理削除せず `is_active=false` で無効化する。
 
 #### `stores`（店舗）
 `id` / `name` / `area_id` FK / `owner_user_id?` FK→users / `owner_name?` / `director_name?` / `address?` / `is_active`。
@@ -440,7 +487,11 @@ erDiagram
 | 10. 複数シナリオ同時参加 | `scenario_enrollments` が候補者ごとに複数行 |
 | 10. 内定時のシナリオ自動停止 | フェーズ変更時に `stop_conditions` を評価して `status='stopped'` |
 | 16. 見送りと不採用の区別 | `introductions.response='passed'`（店舗単位）と `candidates.status='rejected'`（候補者単位）を別テーブルで管理 |
-| 19. 数字クリックで一覧表示 | ダッシュボードの各カードは候補者検索クエリのパラメータ（`stage`, `category`, `fiscal_year` …）に変換され、そのまま候補者一覧へ遷移 |
+| 19. 数字クリックで一覧表示 | ダッシュボードの各カードは候補者検索クエリのパラメータ（`stage`, `category`, `year_axis`, `year` …）に変換され、そのまま候補者一覧へ遷移 |
+| 19. 年度軸の切替（A-5） | `offer_year`（既定・内定日/暦年）と `join_fiscal_year`（入社日/4月始まり）の2列を持ち、画面上部のトグルで集計軸を切替。既定値は `app_settings` に保持 |
+| A-7. 希望エリア | `candidate_desired_areas`（第1・第2希望）＋ `candidates.desired_prefecture` ＋ 自由記述の3層。エリアマスタは管理画面から随時追加 |
+| A-8. LINE非経由の応募 | `candidates.registration_source='manual'` で LINE 連携なしの候補者を登録。後日の友だち追加時に統合候補を提示し、`candidate_merge_logs` を残して統合 |
+| A-9. 選考中候補者の移行 | `import_batches` / `import_rows` による CSV 取込。`external_ref` で重複を防止し、将来の追加取込にも対応 |
 | 20. ファネル転換率 | `candidate_stage_histories` × `pipeline_stages.funnel_step` で「各ステップ到達人数」を期間集計し、隣接ステップ間の比率を算出 |
 | 21. 検索条件 | `candidates` の列＋`candidate_tags`＋`interview_evaluations.overall`（非正規化列 `overall_rating`）で構成。タグ条件は AND/OR を選択可能に |
 | 24. 入社後分析 | `candidates.id` ⇔ `employee_links.employee_code` の対応表。評価スコアが列で保持されているため、入社後データと結合するだけで分析可能 |
@@ -472,11 +523,15 @@ model Candidate {
   prevSalary          Int?
   prevWorkingHours    String?
   prevDaysOff         String?
-  desiredAreaId       String?
+  desiredPrefecture   String?
+  desiredAreaText     String?
   changeTiming        String?
   familyStatus        String?
   questions           String?
   source              String?
+  sourceDetail        String?
+  registrationSource  String   @default("line") // line | manual | import
+  externalRef         String?
   instagram           String?
   xAccount            String?
 
@@ -485,13 +540,15 @@ model Candidate {
   status              String   @default("active") // active | hired | declined | rejected
   ownerUserId         String?
   appliedAt           DateTime?
-  fiscalYear          Int?
+  offerYear           Int?     // 内定日の暦年（ダッシュボード既定軸）
+  joinFiscalYear      Int?     // 入社日ベースの年度（4月始まり）
   directorCandidate   Boolean  @default(false)
   overallRating       String?
   lineFriendAt        DateTime?
+  mergedIntoCandidateId String?
 
   stage               PipelineStage @relation(fields: [stageId], references: [id])
-  desiredArea         Area?         @relation(fields: [desiredAreaId], references: [id])
+  desiredAreas        CandidateDesiredArea[]
   lineFriend          LineFriend?
   tags                CandidateTag[]
   stageHistories      CandidateStageHistory[]
@@ -507,8 +564,24 @@ model Candidate {
   updatedAt           DateTime @updatedAt
 
   @@index([stageId, status])
-  @@index([employmentCategory, fiscalYear])
+  @@index([employmentCategory, offerYear])
+  @@index([joinFiscalYear])
   @@index([appliedAt])
+  @@index([registrationSource])
+}
+
+model CandidateDesiredArea {
+  id          String  @id @default(uuid(7))
+  candidateId String
+  rank        Int     // 1 = 第1希望, 2 = 第2希望
+  prefecture  String?
+  areaId      String?
+  note        String?
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  area        Area?     @relation(fields: [areaId], references: [id])
+
+  @@unique([candidateId, rank])
+  @@index([prefecture])
 }
 
 model LineFriend {
@@ -584,9 +657,10 @@ model InterviewEvaluation {
 Phase 1 リリース時に投入するマスタ。
 
 - `pipeline_stages`：要件4の20フェーズ（`code` は 3-3 の一覧のとおり）
-- `tags`：要件8のタグ例（資格4・採用区分2・悩み7・行動5・流入6）
-- `areas`：現在採用対象のエリア一覧（**要提供**）
+- `tags`：要件8のタグ例（資格4・採用区分2・悩み7・行動5・流入6）＋「既存LINE」（移行者の識別用）
+- `areas`：**最小構成で開始**（採用対象の都道府県＋紹介実績のあるエリアのみ）。以降は管理画面から追加（A-7）
 - `stores`：見学・配属候補の店舗一覧（**要提供**）
-- `users`：佐藤拓磨・若林・八尋
+- `users`：佐藤拓磨・若林・八尋（`can_login=true`）＋ 院長・オーナー（`can_login=false`、判明している範囲で）
 - `forms`：`initial_survey`（要件9の6項目）、`application`（要件5の全項目）
 - `templates`：要件11の11種（文面は運用側から提供）
+- `app_settings`：年度軸の既定値（`year_axis = 'offer_year'`／内定日ベース・暦年）
