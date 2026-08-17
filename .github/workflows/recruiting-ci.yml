@@ -1,0 +1,45 @@
+name: recruiting CI
+
+on:
+  # main への push と Pull Request のみで実行する
+  # （全ブランチの push でも動かすと、PR 中は同じ検査が二重に走るため）
+  push:
+    branches: [main]
+    paths:
+      - "apps/recruiting/**"
+      - ".github/workflows/recruiting-ci.yml"
+  pull_request:
+    paths:
+      - "apps/recruiting/**"
+      - ".github/workflows/recruiting-ci.yml"
+
+concurrency:
+  group: recruiting-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: apps/recruiting
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      # 型チェック・ビルドでは DB へ接続しないが、Prisma のスキーマ検証に値が必要
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/recruiting/package-lock.json
+
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build
